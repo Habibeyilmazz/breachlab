@@ -133,7 +133,7 @@ def test_internal_keys_are_refused_to_browsers(make_client, captured):
 # ---- safety rails ---------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.10", "::", "example.com", ""])
+@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.10", "::", "example.com", "", "127.0.0.2"])
 def test_refuses_to_bind_anything_but_loopback(host, capsys):
     with pytest.raises(ValueError):
         loopback_address(host)
@@ -142,9 +142,12 @@ def test_refuses_to_bind_anything_but_loopback(host, capsys):
     assert "Refusing to bind" in str(exit_info.value)
 
 
-@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "127.0.0.2"])
-def test_accepts_loopback_bind_addresses(host):
-    assert loopback_address(host)
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
+def test_accepts_the_loopback_addresses_the_app_answers_to(host, make_client):
+    address = loopback_address(host)
+    assert address in ("127.0.0.1", "::1")
+    bracketed = f"[{address}]" if ":" in address else address
+    assert make_client(login=False).get("/lab", headers={"Host": f"{bracketed}:4160"}).status_code == 200
 
 
 def test_non_local_clients_are_refused(make_client):
@@ -216,9 +219,15 @@ def test_is_loopback_host(host, expected):
     [
         ("https://evil.example/", True), ("//evil.example", True), ("/\\evil.example", True),
         ("\\\\evil.example", True), ("https:evil.example", True), (" //evil.example", True),
-        ("javascript:alert(1)", True), ("http://localhost/invoices", False), ("/invoices?q=a", False),
-        ("/", False), ("invoices", False), ("", False),
+        ("javascript:alert(1)", True), ("http://localhost:4160/invoices", False), ("//localhost:4160/x", False),
+        ("https://localhost:4160/", True), ("http://localhost/", True), ("http://localhost:4161/", True),
+        ("http://localhost:99999/", False), ("/invoices?q=a", False), ("/", False), ("invoices", False), ("", False),
     ],
 )  # fmt: skip
 def test_is_external(target, expected):
-    assert is_external(target, "localhost") is expected
+    assert is_external(target, "http://localhost:4160/") is expected
+
+
+def test_is_external_knows_default_ports():
+    assert is_external("http://localhost:80/x", "http://localhost") is False
+    assert is_external("https://localhost/x", "http://localhost") is True

@@ -1,18 +1,19 @@
 """Run the lab: python -m breachlab [--port 4160] [--fixed]"""
 
 import argparse
-import ipaddress
 import sys
 
-from .app import create_app, load_impl
+from .app import LOOPBACK_HOSTS, create_app, load_impl
 
 
 def loopback_address(host: str) -> str:
-    """Return `host` as a loopback IP literal, or raise ValueError. This app must never be reachable from a network."""
-    address = "127.0.0.1" if host == "localhost" else host
-    if not ipaddress.ip_address(address).is_loopback:  # also raises ValueError for anything that is not an IP
+    """Return the address to bind for `host`, or raise ValueError. This app must never be reachable from a network.
+
+    Only the names the app itself answers to are accepted (see loopback_only in app.py).
+    """
+    if host not in LOOPBACK_HOSTS:
         raise ValueError(host)
-    return address
+    return "127.0.0.1" if host == "localhost" else host
 
 
 def main(argv=None):

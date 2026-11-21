@@ -89,16 +89,21 @@ def is_loopback_host(host: str) -> bool:
     return ip.is_loopback or ip.is_unspecified
 
 
-def is_external(target: str, own_host: str) -> bool:
-    """True when a browser following `Location: target` would leave this app."""
+def _origin(parts, default_scheme):
+    scheme = parts.scheme or default_scheme
+    return scheme, parts.hostname, parts.port or {"http": 80, "https": 443}.get(scheme)
+
+
+def is_external(target: str, own_origin: str) -> bool:
+    """True when a browser following `Location: target` from `own_origin` would leave this app."""
     # Browsers drop whitespace and control characters and read "\" as "/".
     cleaned = re.sub(r"[\x00-\x20\x7f]", "", target).replace("\\", "/")
     try:
-        parts = urlsplit(cleaned)
-    except ValueError:
+        parts, own = urlsplit(cleaned), urlsplit(own_origin)
+        if parts.netloc:
+            return _origin(parts, own.scheme) != _origin(own, own.scheme)
+    except ValueError:  # not a URL a browser could follow
         return False
-    if parts.netloc:
-        return parts.netloc != own_host
     return bool(parts.scheme)
 
 
@@ -194,7 +199,9 @@ def create_app(data_dir=None, impl=None):
                 "progress": done,
                 "solved": sum(1 for row in done.values() if row["solved_at"]),
                 "fresh": [BY_ID[i] for i in fresh if i in BY_ID],
-                "reference_fixes": all(m.__name__.startswith("breachlab.solutions.") for m in vars(impl_()).values()),
+                "reference_fixes": all(
+                    getattr(m, "__name__", "").startswith("breachlab.solutions.") for m in vars(impl_()).values()
+                ),
             }
 
         return {"lab_status": lab_status, "csrf_token": session.get("csrf", ""), "origin": own_origin()}
@@ -222,7 +229,7 @@ def create_app(data_dir=None, impl=None):
                 session["uid"] = user["id"]
                 session["csrf"] = secrets.token_urlsafe(24)
                 target = impl_().open_redirect.redirect_target(request.args.get("next", ""))
-                if is_external(target, request.host):
+                if is_external(target, request.host_url):
                     award("open_redirect")
                 return redirect(target)
             error = "Wrong username or password."
