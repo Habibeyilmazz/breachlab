@@ -1,0 +1,11 @@
+{
+  "name": "breachlab-e2e",
+  "private": true,
+  "description": "Browser walkthrough of BreachLab. Needs a running lab; see solve.cjs.",
+  "scripts": {
+    "solve": "node solve.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}
