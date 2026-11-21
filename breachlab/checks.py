@@ -13,8 +13,10 @@ import json
 import re
 import tempfile
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 
+from . import store
 from .store import LEARNER
 
 WORDLIST = Path(__file__).resolve().parent / "wordlists" / "jwt-secrets.txt"
@@ -61,9 +63,48 @@ def _save_account(client, **fields):
     return client.post("/account", data={"csrf_token": _csrf_token(client), **fields})
 
 
+class _ScriptFinder(HTMLParser):
+    """Finds markup that can run script. Quillbook's own pages have none besides lab.js."""
+
+    def __init__(self):
+        super().__init__()
+        self.found = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = {name: value or "" for name, value in attrs}
+        if tag == "script" and "lab.js" not in attrs.get("src", ""):
+            self.found = self.found or "a <script> element"
+        for name, value in attrs.items():
+            if name.startswith("on"):
+                self.found = self.found or f"an {name}= handler on <{tag}>"
+            if name in ("href", "src", "action", "formaction") and value.strip().lower().startswith("javascript:"):
+                self.found = self.found or f"a javascript: URL on <{tag}>"
+
+
+def _live_markup(page):
+    """Describe the first script-capable construct in an HTML page, or return None."""
+    finder = _ScriptFinder()
+    finder.feed(page)
+    return finder.found
+
+
+XSS_PAYLOADS = (
+    "<script>alert(1)</script>",
+    "<img src=x onerror=alert(1)>",
+    "<svg onload=alert(1)>",
+    '<a href="javascript:alert(1)">details</a>',
+)
+
+
 def check_sqli(c):
     attack = None
-    for payload in ("' OR 1=1--", "' UNION SELECT id, username, 0, password_hash FROM users--"):
+    payloads = (
+        "' OR 1=1--",
+        "' UNION SELECT id, username, 0, password_hash FROM users--",
+        "'' OR 1=1--",  # beats escaping only the first quote
+        "\\' OR 1=1--",  # beats backslash-escaping, which SQLite does not understand
+    )
+    for payload in payloads:
         page = _text(c.get("/invoices", query_string={"q": payload}))
         if "Harbor Freight" in page or "scrypt:" in page:
             attack = f"searching for {payload} returned data that is not alice's"
@@ -79,29 +120,30 @@ def check_sqli(c):
 
 def check_reflected_xss(c):
     attack = None
-    for payload in ("<script>alert(1)</script>", "<img src=x onerror=alert(1)>"):
-        if payload in _text(c.get("/help", query_string={"q": payload})):
-            attack = f"/help?q={payload} put the markup into the page unescaped"
+    for payload in XSS_PAYLOADS:
+        found = _live_markup(_text(c.get("/help", query_string={"q": payload})))
+        if found:
+            attack = f"/help?q={payload} put {found} into the page"
             break
     page = _text(c.get("/help", query_string={"q": "a<b export"}))
     broken = None if "a&lt;b export" in page else "the heading should show the search term as text (a<b export)"
-    if broken is None and "<strong>" not in _text(c.get("/help", query_string={"q": "export"})):
-        broken = "the search term should still be shown in bold"
     return attack, broken
 
 
 def check_stored_xss(c):
-    payloads = ('<script>alert("stored")</script>', "<img src=x onerror=alert(1)>")
-    for payload in payloads:
+    attack = None
+    for payload in XSS_PAYLOADS:
         c.post("/notes", data={"body": payload})
+        found = _live_markup(_text(c.get("/notes")))
+        if found:
+            attack = f"the note {payload} put {found} into the board"
+            break
     c.post("/notes", data={"body": "Totals: 5 < 6 & 7 > 2\nsecond line"})
     page = _text(c.get("/notes"))
-    attack = next((f"the note {p} is served as live markup" for p in payloads if p in page), None)
     broken = None
-    if "Totals: 5 &lt; 6 &amp; 7 &gt; 2" not in page:
-        broken = "a note with < and & in it should be shown as the author typed it"
-    elif not re.search(r"7 &gt; 2\s*<br\s*/?>\s*second line", page):
-        broken = "line breaks in a note should still become <br>"
+    # Either <br> or a kept newline (styled with white-space: pre-line) is a fine way to show line breaks.
+    if not re.search(r"Totals: 5 &lt; 6 &amp; 7 &gt; 2\s*(<br\s*/?>)?\s*second line", page):
+        broken = "a two-line note with < and & in it should be shown as the author typed it"
     return attack, broken
 
 
@@ -152,17 +194,26 @@ def check_open_redirect(c):
 def _is_external(location):
     from .app import is_external
 
-    return is_external(location, "localhost")
+    return is_external(location, "http://localhost")
+
+
+def _alice_record(c):
+    conn = store.connect(Path(c.application.config["DATA_DIR"]) / "app.db")
+    try:
+        return dict(conn.execute("SELECT * FROM users WHERE id = 1").fetchone())
+    finally:
+        conn.close()
 
 
 def check_mass_assignment(c):
     attack = None
-    _save_account(c, display_name="Alice Moreau", email="alice@quillbook.test", role="admin")
-    if c.get("/admin").status_code == 200:
-        attack = "posting role=admin with the profile form made alice an administrator"
-    _save_account(c, display_name="Alice Moreau", email="alice@quillbook.test", credit_cents="99999900")
-    if attack is None and "$999,999.00" in _text(c.get("/account")):
-        attack = "posting credit_cents with the profile form changed alice's account credit"
+    before = _alice_record(c)
+    extras = {"role": "admin", "credit_cents": "99999900", "username": "mallory", "password_hash": "x", "id": "3"}
+    for field, value in extras.items():
+        _save_account(c, display_name="Alice Moreau", email="alice@quillbook.test", **{field: value})
+        if _alice_record(c)[field] != before[field]:
+            attack = f"posting {field}={value} with the profile form changed alice's {field}"
+            break
     _save_account(c, display_name="Alice M.", email="alice.m@quillbook.test")
     page = _text(c.get("/account"))
     broken = None if "Alice M." in page and "alice.m@quillbook.test" in page else "name and email should still save"
@@ -172,10 +223,19 @@ def check_mass_assignment(c):
 def check_csrf(c):
     attack = None
     forged = {"display_name": "Alice Moreau", "email": "attacker@evil.test"}
-    for extra in ({}, {"csrf_token": ""}, {"csrf_token": "guess"}):
+    real = _csrf_token(c)
+    guesses = {
+        "no token": {},
+        "an empty token": {"csrf_token": ""},
+        "a guessed token": {"csrf_token": "guess"},
+        "only the first character of the token": {"csrf_token": real[:1]},
+        "the token minus its last character": {"csrf_token": real[:-1]},
+        "the token with extra characters": {"csrf_token": real + "x"},
+    }
+    for description, extra in guesses.items():
         c.post("/account", data={**forged, **extra}, headers={"Origin": "http://127.0.0.1:8001"})
         if "attacker@evil.test" in _text(c.get("/account")):
-            attack = f"a cross-origin post with {extra or 'no token'} changed alice's email"
+            attack = f"a cross-origin post with {description} changed alice's email"
             break
     _save_account(c, display_name="Alice Moreau", email="alice.new@quillbook.test")
     broken = None if "alice.new@quillbook.test" in _text(c.get("/account")) else "the real form should still save"
@@ -238,6 +298,11 @@ def check_ssrf(c):
         if "qb-billing-live" in _text(c.post("/invoices/import", data={"url": url})):
             attack = f"importing {url} returned the internal billing keys"
             break
+    # Internal addresses the sandbox will not really fetch: here the decision itself is the evidence.
+    for host in ("169.254.169.254", "10.0.0.5", "192.168.1.1", "172.16.0.9", "[fd00::1]", "[fe80::1]"):
+        url = f"http://{host}/latest/meta-data/"
+        if attack is None and "Lab sandbox" in _text(c.post("/invoices/import", data={"url": url})):
+            attack = f"{url} was accepted for fetching, and it is an internal address"
     public = c.post("/invoices/import", data={"url": "http://1.1.1.1/invoice.json"})
     broken = (
         None if public.status_code == 200 and "Lab sandbox" in _text(public) else "public URLs should still be accepted"

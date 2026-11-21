@@ -3,11 +3,14 @@
 import hashlib
 import hmac
 import re
+from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 import pytest
+from markupsafe import Markup
 
 from breachlab import checks
-from breachlab.app import load_impl
+from breachlab.app import is_loopback_host, load_impl
 from breachlab.challenges import CHALLENGES
 
 IDS = [c.id for c in CHALLENGES]
@@ -88,3 +91,130 @@ def test_reference_fix_explains_itself(challenge_id):
     doc = getattr(load_impl("solutions"), challenge_id).__doc__
     for heading in ("Why the hole existed", "Why this fix works", "The secure pattern"):
         assert heading in doc
+
+
+# ---- the checks must not be fooled by half-fixes, nor reject sound alternatives ----------
+
+
+def _with(make_client, challenge_id, **functions):
+    """A lab on the reference fixes, except one challenge whose functions are replaced."""
+    impl = load_impl("solutions")
+    setattr(impl, challenge_id, SimpleNamespace(**functions))
+    client = make_client("solutions")
+    client.application.config["IMPL"] = impl
+    return checks.CHECKS[challenge_id](client)
+
+
+def _escape_first_quote(db, user_id, query):
+    escaped = query.replace("'", "''", 1)
+    sql = f"SELECT id, customer, amount_cents, status FROM invoices WHERE owner_id = ? AND customer LIKE '%{escaped}%'"
+    return db.execute(sql, (user_id,)).fetchall()
+
+
+def _strip_script_tags(body):
+    return Markup(re.sub(r"(?is)<script.*?</script>", "", body).replace("\n", "<br>"))
+
+
+def _refuse_loopback_only(url):
+    return urlsplit(url).scheme in ("http", "https") and not is_loopback_host(urlsplit(url).hostname or "")
+
+
+HALF_FIXES = {
+    "sqli": {"search_invoices": _escape_first_quote},
+    "stored_xss": {"render_note": _strip_script_tags},
+    "reflected_xss": {"results_heading": lambda q, n: Markup(f"{n} for {q.replace('<script', '')}")},
+    "csrf": {"is_request_genuine": lambda session, sent: bool(sent) and session.startswith(sent)},
+    "ssrf": {"is_allowed_url": _refuse_loopback_only},
+    "mass_assignment": {
+        "profile_changes": lambda form: {k: v for k, v in form.items() if k not in ("role", "credit_cents")}
+    },
+    "open_redirect": {"redirect_target": lambda url: "/invoices" if url.startswith("http") else url or "/invoices"},
+    "path_traversal": {"export_path": lambda base, name: None if name.startswith("..") else base / name},
+    "idor": {"load_invoice": lambda db, uid, iid: db.execute("SELECT * FROM invoices WHERE id = ?", (iid,)).fetchone()},
+}
+
+
+@pytest.mark.parametrize("challenge_id", HALF_FIXES)
+def test_half_fixes_do_not_pass_the_check(challenge_id, make_client):
+    attack, _broken = _with(make_client, challenge_id, **HALF_FIXES[challenge_id])
+    assert attack is not None
+
+
+SOUND_ALTERNATIVES = {
+    "reflected_xss": {"results_heading": lambda q, n: Markup("<b>{}</b>: {} found").format(q, n)},
+    "stored_xss": {"render_note": lambda body: Markup('<span style="white-space: pre-line">{}</span>').format(body)},
+    "open_redirect": {"redirect_target": lambda url: url if url in ("/invoices", "/notes?from=login") else "/invoices"},
+    "mass_assignment": {"profile_changes": lambda form: {"display_name": form["display_name"], "email": form["email"]}},
+}
+
+
+@pytest.mark.parametrize("challenge_id", SOUND_ALTERNATIVES)
+def test_sound_alternative_fixes_pass_the_check(challenge_id, make_client):
+    assert _with(make_client, challenge_id, **SOUND_ALTERNATIVES[challenge_id]) == (None, None)
+
+
+def test_a_crash_in_patched_code_fails_the_check_instead_of_the_lab():
+    impl = load_impl("solutions")
+    impl.idor = SimpleNamespace()  # no load_invoice at all
+    report = checks.run("idor", impl)
+    assert not report.ok
+
+
+# ---- reference fixes: edge cases --------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url, allowed",
+    [
+        ("http://1.1.1.1/a", True), ("https://8.8.8.8:8443/a", True),
+        ("http://127.0.0.1/", False), ("http://localhost/", False), ("http://[::1]/", False),
+        ("http://2130706433/", False), ("http://127.1/", False), ("http://0x7f.0.0.1/", False),
+        ("http://0.0.0.0/", False), ("http://[::ffff:127.0.0.1]/", False), ("http://[::ffff:10.0.0.1]/", False),
+        ("http://10.0.0.5/", False), ("http://192.168.1.1/", False), ("http://172.16.0.9/", False),
+        ("http://169.254.169.254/latest/meta-data/", False), ("http://[fd00::1]/", False), ("http://[fe80::1]/", False),
+        ("http://224.0.0.1/", False), ("http://[ff02::1]/", False),
+        ("ftp://1.1.1.1/", False), ("file:///etc/hosts", False), ("http://", False), ("http://[bad/", False), ("", False),
+        ("http://1.1.1.1:notaport/", False),
+    ],
+)  # fmt: skip
+def test_reference_ssrf_fix_only_allows_public_addresses(url, allowed):
+    assert load_impl("solutions").ssrf.is_allowed_url(url) is allowed
+
+
+@pytest.mark.parametrize(
+    "target, expected",
+    [
+        ("/notes", "/notes"), ("/invoices?q=a&b=1", "/invoices?q=a&b=1"), ("", "/invoices"),
+        ("https://evil.example", "/invoices"), ("//evil.example", "/invoices"), ("/\\evil.example", "/invoices"),
+        ("\\\\evil.example", "/invoices"), ("/\t/evil.example", "/invoices"), ("https:evil.example", "/invoices"),
+        ("javascript:alert(1)", "/invoices"), ("notes", "/invoices"), (" /notes", "/invoices"),
+    ],
+)  # fmt: skip
+def test_reference_open_redirect_fix_only_allows_local_paths(target, expected):
+    assert load_impl("solutions").open_redirect.redirect_target(target) == expected
+
+
+@pytest.mark.parametrize("name", ["../private/payroll-2026.txt", "/etc/hosts", "a\x00b", "", ".", "missing.txt"])
+def test_reference_path_fix_returns_nothing_for_bad_names(name, tmp_path):
+    (tmp_path / "exports").mkdir()
+    (tmp_path / "exports" / "invoice-1.txt").write_text("ok")
+    (tmp_path / "private").mkdir()
+    (tmp_path / "private" / "payroll-2026.txt").write_text("secret")
+    export_path = load_impl("solutions").path_traversal.export_path
+    assert export_path(tmp_path / "exports", name) is None
+    assert export_path(tmp_path / "exports", "invoice-1.txt") == (tmp_path / "exports" / "invoice-1.txt").resolve()
+
+
+@pytest.mark.parametrize("package", ["vulnerable", "solutions"])
+def test_absurdly_nested_token_is_rejected_not_a_crash(make_client, package):
+    nested = checks._b64(("[" * 20000 + "]" * 20000).encode())
+    for token in (f"{nested}.e30.", f"{checks._b64(b'{}')}.{nested}."):
+        response = make_client(package).get("/api/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 401
+
+
+def test_reference_csrf_fix_never_matches_an_empty_session_token():
+    genuine = load_impl("solutions").csrf.is_request_genuine
+    assert genuine("tok", "tok") is True
+    assert (genuine("", ""), genuine("tok", ""), genuine("tok", "to"), genuine("tok", "tokk")) == (False,) * 4
+    assert genuine("tok", "tök") is False  # non-ASCII input must not raise
