@@ -37,7 +37,7 @@ def verify(token: str):
         header_b64, payload_b64, signature = token.split(".")
         header = json.loads(_unb64(header_b64))
         claims = json.loads(_unb64(payload_b64))
-    except ValueError:
+    except (ValueError, RecursionError):
         return None
     if not isinstance(header, dict) or not isinstance(claims, dict):
         return None

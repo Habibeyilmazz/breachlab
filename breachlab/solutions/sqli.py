@@ -12,8 +12,9 @@ Why this fix works
 
 The secure pattern
     Always use parameterized queries (or an ORM/query builder that does). Never
-    build SQL with f-strings, `+` or `%`. Escaping quotes by hand is not a fix: it
-    is easy to miss a case and it breaks legitimate input such as O'Brien.
+    build SQL with f-strings, `+` or `%`. Escaping quotes by hand is fragile: the
+    rules differ between databases and contexts, and one missed case (a second
+    quote, a number that is not quoted at all) reopens the hole.
     Things a placeholder cannot stand for (table or column names, sort direction)
     must be picked from a fixed list in your code, never copied from the request.
 """

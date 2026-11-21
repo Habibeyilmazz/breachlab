@@ -18,7 +18,9 @@ The secure pattern
     hosts; that is stronger than any blocklist. If arbitrary public URLs are
     required: allow only http/https, resolve and check every address, connect to
     the address you checked (otherwise DNS can change between check and use),
-    and do not follow redirects without re-checking each hop. Run the fetcher
+    and do not follow redirects without re-checking each hop. "Not loopback" is
+    not enough: private ranges (10/8, 192.168/16), link-local addresses and
+    multicast must be refused too, which is why this checks for "public" instead. Run the fetcher
     with no ambient credentials, and firewall it from internal networks.
 """
 
@@ -31,7 +33,7 @@ def _is_public(address: str) -> bool:
     ip = ipaddress.ip_address(address.split("%")[0])  # drop an IPv6 zone id
     if ip.version == 6 and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
-    return ip.is_global
+    return ip.is_global and not ip.is_multicast
 
 
 def is_allowed_url(url: str) -> bool:

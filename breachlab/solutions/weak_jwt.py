@@ -11,7 +11,8 @@ Why this fix works
     The algorithm is decided by the server: only HS256 is accepted, whatever the
     header claims. The secret is 32 random bytes, far beyond guessing. Signatures
     are compared with hmac.compare_digest so response timing does not leak how
-    many characters matched.
+    many characters matched. The claims are only parsed after the signature has
+    been verified, so unauthenticated input never reaches the JSON parser.
 
 The secure pattern
     Use a maintained JWT library and always pass the list of algorithms you
@@ -56,12 +57,12 @@ def verify(token: str):
     try:
         header_b64, payload_b64, signature = token.split(".")
         header = json.loads(_unb64(header_b64))
-        claims = json.loads(_unb64(payload_b64))
-    except ValueError:
+        if not isinstance(header, dict) or header.get("alg") != "HS256":
+            return None
+        expected = _signature(f"{header_b64}.{payload_b64}")
+        if not hmac.compare_digest(signature.encode(), expected.encode()):
+            return None
+        claims = json.loads(_unb64(payload_b64))  # parsed only once the signature has been checked
+    except (ValueError, RecursionError):  # not base64, not JSON, or absurdly nested JSON
         return None
-    if not isinstance(header, dict) or not isinstance(claims, dict):
-        return None
-    if header.get("alg") != "HS256":
-        return None
-    expected = _signature(f"{header_b64}.{payload_b64}")
-    return claims if hmac.compare_digest(signature.encode(), expected.encode()) else None
+    return claims if isinstance(claims, dict) else None
