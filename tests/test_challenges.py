@@ -11,7 +11,7 @@ from markupsafe import Markup
 
 from breachlab import checks
 from breachlab.app import is_loopback_host, load_impl
-from breachlab.challenges import CHALLENGES
+from breachlab.challenges import BY_ID, CHALLENGES, UNSIGNED_ADMIN_TOKEN
 
 IDS = [c.id for c in CHALLENGES]
 # These two flags are captured by script running in a real browser (see e2e/solve.cjs);
@@ -65,6 +65,14 @@ def test_weak_jwt_secret_can_be_cracked_with_the_shipped_wordlist(make_client, c
     forged = checks._forge(b"sunshine", "HS256", {"sub": "alice", "role": "admin"})
     report = client.get("/api/admin/report", headers={"Authorization": f"Bearer {forged}"})
     assert report.status_code == 200 and "BL{" in report.get_json()["flag"]
+    assert captured() == {"weak_jwt"}
+
+
+def test_the_token_spelled_out_in_the_last_jwt_hint_is_the_answer(make_client, captured):
+    assert UNSIGNED_ADMIN_TOKEN in BY_ID["weak_jwt"].hints[2]
+    bearer = {"Authorization": f"Bearer {UNSIGNED_ADMIN_TOKEN}"}
+    assert make_client("solutions").get("/api/admin/report", headers=bearer).status_code == 401
+    assert make_client("vulnerable").get("/api/admin/report", headers=bearer).status_code == 200
     assert captured() == {"weak_jwt"}
 
 

