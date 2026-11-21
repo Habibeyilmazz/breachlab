@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed (reliability pass, round 13)
+
+- The 404 page and the JSON 404 for `/api/` and `/internal/` used Flask's stock "If you entered the URL
+  manually..." text. They now say "There is no page at this address." (specific messages such as "No such
+  invoice." are untouched). Test: `test_an_unknown_address_gets_plain_wording_not_flasks_stock_text`.
+- Tried to break it and found nothing else: ~130 odd GETs (200 KB values, NUL, RTL/emoji, `../`, `1e999`)
+  and POSTs (huge bodies, invalid UTF-8, JSON instead of form) against vulnerable and fixed code gave no
+  5xx; on a real server on port 4168, 300 concurrent requests, a 70 KB path, a 20 KB query, a bogus
+  `Content-Length` and a garbage request line all got clean answers and the server kept serving.
+- Not changed: Windows, Safari and Lighthouse remain unchecked. PID 68470 on port 4160 is not ours.
+
 ### Added (feature round 12)
 
 - "Start over" on every challenge page. Once a learner had fixed a hole there was no way back to the

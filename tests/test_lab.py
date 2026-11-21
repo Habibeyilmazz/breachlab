@@ -55,6 +55,14 @@ def test_hints_use_the_address_the_learner_is_browsing(make_client):
     assert "Import <code>http://localhost:4160/internal/keys</code>" in page
 
 
+@pytest.mark.parametrize("path", ["/no-such-page", "/api/no-such-thing"])
+def test_an_unknown_address_gets_plain_wording_not_flasks_stock_text(path, make_client):
+    response = make_client().get(path)
+    assert response.status_code == 404
+    assert "If you entered the URL manually" not in response.get_data(as_text=True)
+    assert "There is no page at this address." in response.get_data(as_text=True)
+
+
 def test_unknown_challenge_is_a_404(make_client):
     client = make_client(login=False)
     assert client.get("/lab/c/nope").status_code == 404

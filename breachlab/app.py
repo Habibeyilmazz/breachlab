@@ -38,7 +38,7 @@ from flask import (
     url_for,
 )
 from markupsafe import Markup
-from werkzeug.exceptions import HTTPException, ServiceUnavailable
+from werkzeug.exceptions import HTTPException, NotFound, ServiceUnavailable
 from werkzeug.security import check_password_hash
 from werkzeug.urls import iri_to_uri
 
@@ -267,6 +267,8 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
 
     @app.errorhandler(HTTPException)
     def http_error(error):
+        if error.code == 404 and isinstance(error, NotFound) and error.description == NotFound.description:
+            error.description = "There is no page at this address."
         if request.path.startswith(("/api/", "/internal/")):
             return jsonify(error=error.description), error.code
         # An unhandled exception is most likely the learner's patch: name it instead of "server overloaded".
