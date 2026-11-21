@@ -111,6 +111,7 @@ body:has(.lab) { background: var(--paper); }
   background: var(--ink); color: var(--on-ink); font: 600 15px var(--sans); text-decoration: none; cursor: pointer;
 }
 .lab-btn:hover { background: var(--ink-soft); border-color: var(--ink-soft); }
+.lab-btn[aria-disabled="true"] { opacity: 0.7; cursor: progress; }
 .lab-btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
 .lab-btn-danger:hover { background: var(--red-wash); }
 .lab-actions { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -168,12 +169,13 @@ body:has(.lab) { background: var(--paper); }
 .qb-top nav { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .qb-top nav a { text-decoration: none; padding: 4px 0; }
 .qb-top nav a:hover { color: var(--qb); text-decoration: underline; }
-.qb-user { display: flex; align-items: center; gap: 12px; margin-left: auto; font-size: 14px; }
+.qb-user { display: flex; align-items: center; gap: 12px; min-width: 0; margin-left: auto; font-size: 14px; overflow-wrap: anywhere; }
 .qb-main { max-width: 880px; margin: 0 auto; padding: 28px 20px 64px; }
 .qb-main h1 { margin: 0 0 16px; font-size: 1.7rem; }
 .qb-main h2 { margin: 28px 0 8px; font-size: 1.15rem; }
 .qb-main a { color: var(--qb); }
 .qb-narrow { max-width: 380px; margin: 24px auto; }
+.qb-narrow code { white-space: nowrap; }
 .qb-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
 .qb-muted { color: var(--qb-muted); font-size: 14px; }
 .qb-btn { padding: 8px 14px; border: 1px solid var(--qb); border-radius: 6px; background: var(--qb); color: var(--qb-bg); font: inherit; font-size: 15px; cursor: pointer; text-decoration: none; }
@@ -194,6 +196,8 @@ body:has(.lab) { background: var(--paper); }
 .qb-table .voucher { white-space: nowrap; }
 .qb-table caption { text-align: left; padding-bottom: 4px; }
 .qb-status { padding: 2px 8px; border-radius: 10px; background: var(--qb-soft); font-size: 13px; }
+.qb-status[data-status="paid"] { background: var(--green-wash); color: var(--qb-ok-ink); }
+.qb-status[data-status="overdue"] { background: var(--red-wash); color: var(--qb-alert-ink); }
 .qb-alert, .qb-ok { padding: 10px 14px; border-radius: 6px; }
 .qb-alert { background: var(--red-wash); color: var(--qb-alert-ink); overflow-wrap: anywhere; }
 .qb-ok { background: var(--green-wash); color: var(--qb-ok-ink); }
@@ -210,7 +214,11 @@ body:has(.lab) { background: var(--paper); }
 .qb-results { font-size: 15px; }
 
 @media (max-width: 560px) {
-  .labbar-count { margin-left: 0; }
+  /* name, count and link share the first row; the seals get a row of their own */
+  .labbar { gap: 8px 14px; padding: 8px 16px; }
+  .seals { order: 1; flex-basis: 100%; }
+  .qb-top { padding: 10px 16px; }
+  .qb-top nav { order: 1; flex-basis: 100%; }
   .caselist li { grid-template-columns: 2ch 1fr; }
   .case-state { grid-column: 2; }
   .caselist li::before { align-self: start; line-height: 1.2; }

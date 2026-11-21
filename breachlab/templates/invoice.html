@@ -6,7 +6,7 @@
 <dl class="qb-facts">
   <dt>Customer</dt><dd>{{ invoice.customer }}</dd>
   <dt>Amount</dt><dd>{{ invoice.amount_cents|money }}</dd>
-  <dt>Status</dt><dd><span class="qb-status">{{ invoice.status }}</span></dd>
+  <dt>Status</dt><dd><span class="qb-status" data-status="{{ invoice.status }}">{{ invoice.status }}</span></dd>
   <dt>Owner</dt><dd>{{ owner.display_name if owner else 'unknown' }}</dd>
   <dt>Memo</dt><dd>{{ invoice.memo }}</dd>
 </dl>

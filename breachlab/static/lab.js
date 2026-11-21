@@ -30,6 +30,20 @@
 
   document.addEventListener("submit", (event) => {
     const message = event.submitter?.dataset.confirm;
-    if (message && !nativeConfirm(message)) event.preventDefault();
+    if (message && !nativeConfirm(message)) return event.preventDefault();
+    // Slow checks (the race check takes a second): show that it is running and ignore a second click.
+    const button = event.submitter;
+    if (!button?.dataset.busy) return;
+    if (button.getAttribute("aria-disabled") === "true") return event.preventDefault();
+    button.dataset.idle = button.textContent;
+    button.textContent = button.dataset.busy;
+    button.setAttribute("aria-disabled", "true");
+  });
+  // Coming back with the Back button restores the page as it was left, busy label included.
+  window.addEventListener("pageshow", () => {
+    for (const button of document.querySelectorAll("[data-busy][aria-disabled]")) {
+      button.textContent = button.dataset.idle;
+      button.removeAttribute("aria-disabled");
+    }
   });
 })();

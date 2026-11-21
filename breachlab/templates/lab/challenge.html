@@ -61,7 +61,7 @@
     <p>Then run the provided test from the project folder, or use the button, which runs the same check:</p>
     <pre class="cmd">{{ test_command }}</pre>
     <form method="post" action="{{ url_for('lab_verify', challenge_id=challenge.id) }}#stage2">
-      <button class="lab-btn">Check my fix</button>
+      <button class="lab-btn" data-busy="Checking…">Check my fix</button>
     </form>
     {% if report %}
     <div class="report {{ 'report-ok' if report.ok else 'report-fail' }}" role="status">

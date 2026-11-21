@@ -165,7 +165,22 @@ async function main() {
   // Stage 2: "Check my fix" runs the same check as the provided test.
   for (const id of IDS) {
     await page.goto(`${BASE}/lab/c/${id}`);
-    await page.getByRole("button", { name: "Check my fix" }).click();
+    const check = page.getByRole("button", { name: "Check my fix" });
+    if (id === "race_condition") {
+      // The race check takes about a second; the button says so while it runs and ignores a second
+      // click. (Playwright waits for the response before it looks again, so read the label in-page.)
+      const states = await check.evaluate((button) => {
+        button.form.requestSubmit(button);
+        const busy = `${button.textContent} ${button.getAttribute("aria-disabled")}`;
+        let again = true;
+        document.addEventListener("submit", (event) => (again = !event.defaultPrevented), { once: true });
+        button.form.requestSubmit(button);
+        return [busy, again];
+      });
+      assert.deepEqual(states, ["Checking… true", false], "busy state of Check my fix");
+    } else {
+      await check.click();
+    }
     await page.locator(".report").waitFor();
     assert.equal(await page.locator(".report-ok").count(), FIXED ? 1 : 0, `fix check for ${id}`);
   }
