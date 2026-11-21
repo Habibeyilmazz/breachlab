@@ -15,6 +15,8 @@ All notable changes to this project are documented here. The format follows
   and POSTs (huge bodies, invalid UTF-8, JSON instead of form) against vulnerable and fixed code gave no
   5xx; on a real server on port 4168, 300 concurrent requests, a 70 KB path, a 20 KB query, a bogus
   `Content-Length` and a garbage request line all got clean answers and the server kept serving.
+- Two real-server tests (reloader) were racy on a slow CI runner: a response cut off mid-read by a reload,
+  and git briefly removing the file being polled. Both now retry; CI went red once on this, then green.
 - Not changed: Windows, Safari and Lighthouse remain unchecked. PID 68470 on port 4160 is not ours.
 
 ### Added (feature round 12)
