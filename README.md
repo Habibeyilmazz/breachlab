@@ -82,6 +82,9 @@ reference fixes so you can watch your attacks fail.
   strip of ten squares in the bar above every page.
 - Reset buttons: restore the sample data (keeps your flags), or wipe data and progress.
 - `--fixed` mode to run the app on the reference fixes.
+- Light and dark themes that follow your system setting, a phone-width layout, and keyboard focus you can see.
+
+![The challenge list in the dark theme](docs/screenshots/progress-dark.png)
 
 ## How it works
 

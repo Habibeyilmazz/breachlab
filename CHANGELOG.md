@@ -6,7 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A dark theme for the lab pages and Quillbook, picked from the system's `prefers-color-scheme`.
+  Colours in `static/style.css` are tokens on `:root`; `--night` is for surfaces that stay dark in
+  both themes (lab bar, code blocks).
+
 ### Fixed
+
+- Keyboard focus rings were amber on light paper (about 2:1 contrast). They are ink on light
+  backgrounds and amber on dark ones.
+- The progress squares in the lab bar were 18px with 5px gaps, under the 24px target size. They are
+  20px with 6px gaps.
+- At phone width the challenge number sat on a line of its own above each title, and the invoice
+  table split amounts, column headers and status words mid-word (`$1,240.` / `00`).
 
 - The forged JWT flag was captured without forging anything: after the mass assignment challenge
   alice is a real admin, and the token her account page shows opened `/api/admin/report`. A token
@@ -32,6 +45,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Notes for the next contributor
 
+- Design pass: checked desktop and 390px, light and dark, by screenshot, plus Tab order on the
+  challenge list. README screenshots were retaken from the running app (vulnerable lab with ten
+  flags, four marked fixed with "Check my fix" on a `--fixed` server sharing the same checkout).
 - First-run check done from a fresh clone on macOS, Python 3.12: quickstart, every third hint
   followed literally in Chromium, patch / "Check my fix" / `pytest fix_tests -k`, a syntax error and
   recovery, `--fixed`, `--host ::1`, `--host localhost`, a refused `--host 0.0.0.0`, a busy port,
