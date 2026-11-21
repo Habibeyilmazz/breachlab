@@ -4,7 +4,7 @@
 //   python -m breachlab --fixed --no-reload &  then   MODE=fixed node e2e/solve.cjs
 //
 // Default mode proves every exploit works and its flag is captured. MODE=fixed proves the
-// same attacks fail on the reference fixes and that "Check my fix" accepts all ten.
+// same attacks fail on the reference fixes and that "Check my fix" accepts all eleven.
 // This wipes the lab's progress first. The CSRF step uses the lab's built-in attacker site (Mallory's
 // site), which the server runs on the next port (ATTACKER_PORT if you started it with --attacker-port).
 
@@ -18,7 +18,7 @@ const ATTACKER_PORT = Number(process.env.ATTACKER_PORT || Number(new URL(BASE).p
 const ATTACKER = `http://${new URL(BASE).hostname}:${ATTACKER_PORT}`;
 const FIXED = process.env.MODE === "fixed";
 const OUT = path.join(__dirname, "out");
-const IDS = ["sqli", "reflected_xss", "stored_xss", "idor", "path_traversal", "open_redirect", "mass_assignment", "csrf", "weak_jwt", "ssrf"];
+const IDS = ["sqli", "reflected_xss", "stored_xss", "idor", "path_traversal", "open_redirect", "mass_assignment", "csrf", "weak_jwt", "ssrf", "race_condition"];
 
 const b64 = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
@@ -148,7 +148,18 @@ async function main() {
   await shot("07-ssrf");
   await settle("ssrf");
 
-  assert.equal(await flags(), FIXED ? 0 : 10);
+  // 11. Race condition: the last hint's console snippet, run on the Account page exactly as written.
+  await page.goto(`${BASE}/lab/c/race_condition`);
+  const snippet = await page.locator(".hints details").nth(2).locator("code").textContent();
+  await page.goto(`${BASE}/account`);
+  await Promise.all([page.waitForNavigation(), page.evaluate(`(async () => { ${snippet} })()`).catch(() => {})]);
+  const credited = await page.locator("#credit-history tbody tr").count();
+  assert.ok(FIXED ? credited === 1 : credited > 1, `QB-WELCOME-10 credited ${credited} times`);
+  if (!FIXED) await page.locator(".flagbanner", { hasText: "Race condition" }).waitFor();
+  await shot("07b-race-condition");
+  await settle("race_condition");
+
+  assert.equal(await flags(), FIXED ? 0 : IDS.length);
   await shot("08-progress", { fullPage: true });
 
   // Stage 2: "Check my fix" runs the same check as the provided test.
@@ -162,7 +173,7 @@ async function main() {
   await page.locator("details").first().click();
   await shot("09-challenge", { fullPage: true });
   await page.goto(`${BASE}/lab`);
-  assert.equal(await page.locator(".stamp-fixed").count(), FIXED ? 10 : 0);
+  assert.equal(await page.locator(".stamp-fixed").count(), FIXED ? IDS.length : 0);
   await shot("10-progress-after-checks", { fullPage: true });
 
   // A phone-sized look at the two main lab pages.
@@ -172,7 +183,7 @@ async function main() {
   await shot("12-mobile-challenge", { fullPage: true });
 
   await browser.close();
-  console.log(FIXED ? "All ten attacks are blocked and all ten fixes verified." : "All ten flags captured.");
+  console.log(FIXED ? `All ${IDS.length} attacks are blocked and all fixes verified.` : `All ${IDS.length} flags captured.`);
 }
 
 main().catch((error) => {

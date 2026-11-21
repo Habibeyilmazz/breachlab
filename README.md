@@ -1,7 +1,7 @@
 # BreachLab
 
 Learn web security by breaking a small, realistic app and then fixing it, entirely on your own machine.
-Ten guided challenges, each with a story, three hints, automatic flag detection, and a test that only passes once you have closed the hole.
+Eleven guided challenges, each with a story, three hints, automatic flag detection, and a test that only passes once you have closed the hole.
 
 > [!CAUTION]
 > **BreachLab is vulnerable on purpose. Never deploy it, never expose it to a network.**
@@ -10,9 +10,9 @@ Ten guided challenges, each with a story, three hints, automatic flag detection,
 
 ![Recording of the lab: the SQL injection challenge, then a search for ' OR 1=1-- in Quillbook shows other people's invoices and captures the flag](docs/demo.gif)
 
-The recording is the real app, driven by `e2e/demo.cjs`. Below: the challenge list with all ten flags captured and four holes fixed.
+The recording is the real app, driven by `e2e/demo.cjs`. Below: the challenge list with all eleven flags captured and four holes fixed.
 
-![The challenge list with all ten flags captured and four holes fixed](docs/screenshots/progress.png)
+![The challenge list with all eleven flags captured and four holes fixed](docs/screenshots/progress.png)
 
 ## Quickstart
 
@@ -60,7 +60,7 @@ why the hole existed, why the fix works, and the general pattern to use in real 
 page can show it (behind a spoiler), and `python -m breachlab --fixed` runs the whole app on the
 reference fixes so you can watch your attacks fail.
 
-## The ten challenges
+## The eleven challenges
 
 | # | Challenge | Where in Quillbook | Function you patch |
 |---|-----------|--------------------|--------------------|
@@ -74,10 +74,11 @@ reference fixes so you can watch your attacks fail.
 | 8 | Cross-site request forgery | Account profile form | `csrf.is_request_genuine` |
 | 9 | Forged JWT (`alg: none` and a weak secret) | API token | `weak_jwt.verify` |
 | 10 | Server-side request forgery | Import invoice from URL | `ssrf.is_allowed_url` |
+| 11 | Race condition | Voucher redemption on the account page | `race_condition.redeem_voucher` |
 
 ## Features
 
-- Ten challenges with a story, a goal, three progressive hints and a flag each.
+- Eleven challenges with a story, a goal, three progressive hints and a flag each.
 - Automatic detection: the server recognises a successful attack (a foreign row in search results, a
   read outside the exports folder, a forged admin token, script calling `alert()`, and so on). There
   is no flag form to paste into.
@@ -89,7 +90,7 @@ reference fixes so you can watch your attacks fail.
   or start. If that port is busy, the lab starts anyway and the challenge page explains how to serve the
   page with `python3 -m http.server` instead.
 - A progress page showing which holes you have broken and which you have fixed, also visible as a
-  strip of ten squares in the bar above every page.
+  strip of squares, one per challenge, in the bar above every page.
 - Reset buttons: restore the sample data (keeps your flags), or wipe data and progress.
 - `--fixed` mode to run the app on the reference fixes.
 - Light and dark themes that follow your system setting, a phone-width layout, and keyboard focus you can see.
@@ -102,8 +103,8 @@ reference fixes so you can watch your attacks fail.
 breachlab/
   app.py           Quillbook (the fake app) and the lab pages, one Flask app
   attacker.py      Mallory's site: serves the learner's CSRF attacker page on the next port
-  vulnerable/      ten small modules, one deliberately vulnerable function each  <- you edit these
-  solutions/       the same ten functions, fixed, with the explanation in the docstring
+  vulnerable/      eleven small modules, one deliberately vulnerable function each  <- you edit these
+  solutions/       the same eleven functions, fixed, with the explanation in the docstring
   checks.py        per challenge: replay the attack, then check the feature still works
   challenges.py    stories, goals, hints
   store.py         throwaway SQLite data and progress
@@ -117,7 +118,9 @@ e2e/solve.cjs      solves every challenge in a real browser (Playwright)
 both states.
 
 Data is throwaway: two small SQLite files and a few text files in `.breachlab/` inside the checkout,
-created on first start. Delete the folder or use the reset buttons at any time.
+created on first start. Delete the folder or use the reset buttons at any time. After a `git pull` that
+brings new challenge data (the race condition challenge did), the next start restores the sample data
+by itself; your flags are kept.
 
 ### Safety rails
 
@@ -157,7 +160,7 @@ pytest                                   # the lab's own suite, green on a clean
 BREACHLAB_IMPL=solutions pytest fix_tests  # the provided tests against the reference fixes
 ```
 
-The suite proves, for each of the ten challenges, that the attack succeeds and the flag is captured
+The suite proves, for each of the eleven challenges, that the attack succeeds and the flag is captured
 on the vulnerable code, that the reference fix blocks the attack while the feature keeps working, and
 that fixing one challenge alone turns its test green. The checks are tested too: a set of plausible
 half-fixes (escaping only the first quote, stripping only `<script>` tags, refusing only loopback
@@ -166,7 +169,7 @@ safety rails above.
 
 Script execution for the two XSS challenges cannot be observed without a browser, so pytest proves
 them by the payload arriving unescaped in the HTML. `e2e/solve.cjs` covers the rest of the way: it
-drives Chromium through all ten exploits against a running server and, with `MODE=fixed`, checks that
+drives Chromium through all eleven exploits against a running server and, with `MODE=fixed`, checks that
 they all fail on the reference fixes. CI runs both.
 
 ```bash
@@ -188,7 +191,7 @@ BreachLab is small and Python-only on purpose. Other tools are better at things 
 
 BreachLab's niche: a Python codebase you can read in an afternoon, nothing to install but Flask, and a
 fix stage that runs a test against the code you patched, so you practise defending as well as attacking.
-It has ten challenges, not hundreds, and it is not a replacement for any of the above.
+It has eleven challenges, not hundreds, and it is not a replacement for any of the above.
 
 ## Known limits
 
@@ -200,12 +203,16 @@ It has ten challenges, not hundreds, and it is not a replacement for any of the 
   explained in the reference fix but not playable (it needs RSA, and the lab has no crypto dependency).
 - On the open redirect challenge, backslash tricks such as `/\evil.example` do not work as attacks
   here because Werkzeug percent-encodes them. The fix test still requires your code to reject them.
+- The race condition check sends four simultaneous redemptions. A patch that only narrows the gap
+  (checking again just before the write, without making check and write one step) can pass it by luck.
+  A `threading.Lock` around the function passes too; it closes the race in this one-process lab but not
+  in an app with several workers, which the reference fix explains.
 - One learner per checkout: progress is global, not per user.
 
 ## Roadmap
 
 - A playable RS256/HS256 key confusion challenge.
-- More bug classes: command injection, XXE, insecure deserialization, race conditions, clickjacking.
+- More bug classes: command injection, XXE, insecure deserialization, clickjacking.
 - A defence-in-depth stage per challenge (Content-Security-Policy, cookie flags, framework CSRF protection).
 - Verified Windows support.
 

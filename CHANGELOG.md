@@ -19,6 +19,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Challenge 11, race condition. Alice has a single-use voucher, `QB-WELCOME-10`; the Account page
+  has a voucher form and a credit history. `vulnerable/race_condition.redeem_voucher` checks "unused",
+  waits half a second for the (simulated) voucher partner, then marks it used, so parallel requests
+  all get the credit. The flag is captured when the same voucher appears twice in `credit_log`. The
+  last hint is a console snippet (five `fetch` calls with `Promise.all`), and `e2e/solve.cjs` runs that
+  hint text verbatim in Chromium. The reference fix claims the voucher with one conditional `UPDATE`
+  and checks `rowcount`. The check fires four simultaneous requests from threads; it also requires
+  the partner's verdict to be respected (withdrawn `QB-SPRING-25`), so deleting the slow call does not
+  count as a fix. Half-fix and sound-alternative tests: an atomic claim whose rowcount is ignored must
+  fail; a `threading.Lock` passes. A `.breachlab/app.db` from an older version (no `credit_log` table)
+  is reseeded on start, flags kept. README screenshots retaken with eleven challenges.
 - Launch material: a demo GIF (`docs/demo.gif`, recorded from the real app by `e2e/demo.cjs`), a comparison with
   Juice Shop, DVWA, WebGoat and PortSwigger's academy, `CONTRIBUTING.md` and issue templates.
 - Mallory's site, a built-in attacker website for the CSRF challenge. It was the only challenge that
@@ -82,6 +93,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Notes for the next contributor
 
+- The race condition check sets `PARTNER_SECONDS` to 0.3 (0.5 in the real lab) and releases four
+  signed-in test clients through a `threading.Barrier`. It was stable over repeated runs here; if it
+  ever flakes in CI, widen the delay rather than retrying. The voucher route also goes through
+  `csrf.is_request_genuine`, so the check posts each client's real token.
 - Werkzeug's `make_server` calls `sys.exit(1)` (not raise) when a port is busy; `start_attacker` in
   `__main__.py` catches `SystemExit` for that reason. Tests that start real servers keep to ports
   4165-4169 and pass `--attacker-port` so the default `--port` + 1 does not leave that range.
@@ -101,8 +116,7 @@ All notable changes to this project are documented here. The format follows
   reach its "success" state legitimately (another challenge's side effect, a failed request) and
   add a test like `test_a_genuine_admin_token_is_not_a_forgery`.
 - Still open and deliberate, see Known limits in the README: XSS flags need `alert()`/`confirm()`/
-  `prompt()`, no RS256/HS256 confusion, the learner serves the CSRF attacker page with
-  `python3 -m http.server`, the reference SSRF fix resolves host names, Windows is unverified.
+  `prompt()`, no RS256/HS256 confusion, the reference SSRF fix resolves host names, Windows is unverified.
 
 ## [0.1.0] - 2026-11-21
 
