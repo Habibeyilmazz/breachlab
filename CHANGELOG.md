@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Checked (launch pass, round 14)
+
+- Re-verified the launch material: 270 tests pass, CI green on main, README screenshots and demo GIF exist and match
+  the eleven challenges, repo description and 16 topics are set, CONTRIBUTING and issue templates are present. Nothing
+  needed changing. Still unchecked: Windows, Safari, Lighthouse. Port 4160 is held by a process that is not ours.
+
 ### Fixed (reliability pass, round 13)
 
 - The 404 page and the JSON 404 for `/api/` and `/internal/` used Flask's stock "If you entered the URL
