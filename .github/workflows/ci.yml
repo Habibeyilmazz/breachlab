@@ -74,7 +74,7 @@ jobs:
       - name: Install Playwright and Chromium
         working-directory: e2e
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
       - name: Every exploit works in a real browser and its flag is captured
         run: |
