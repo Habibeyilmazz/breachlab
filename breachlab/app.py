@@ -36,7 +36,7 @@ from flask import (
     url_for,
 )
 from markupsafe import Markup
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, ServiceUnavailable
 from werkzeug.security import check_password_hash
 from werkzeug.urls import iri_to_uri
 
@@ -241,6 +241,13 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
             }
 
         return {"lab_status": lab_status, "csrf_token": session.get("csrf", "")}
+
+    @app.errorhandler(sqlite3.OperationalError)
+    def database_swapped(error):
+        # A reset swaps app.db under a request that already opened the old file: ask for a retry, not a 500.
+        if not any(word in str(error) for word in ("readonly", "no such table")):
+            raise error
+        return http_error(ServiceUnavailable("The lab data was just reset. Reload the page."))
 
     @app.errorhandler(HTTPException)
     def http_error(error):

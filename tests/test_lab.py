@@ -3,6 +3,7 @@
 import http.client
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
@@ -388,3 +389,14 @@ def test_resetting_while_the_lab_is_in_use_never_breaks_a_request(tmp_path):
     for t in readers:
         t.join()
     assert errors == []
+
+
+def test_a_request_caught_by_a_reset_gets_a_retry_notice_not_a_500(make_client):
+    client = make_client()
+
+    def stale(*_a, **_k):
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+
+    client.application.view_functions["notes"] = stale  # the endpoint behind /notes
+    response = client.post("/notes", data={"body": "x"})
+    assert response.status_code == 503 and "Reload the page" in text(response)

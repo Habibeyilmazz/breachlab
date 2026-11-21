@@ -8,6 +8,10 @@ Ten guided challenges, each with a story, three hints, automatic flag detection,
 > It binds to `127.0.0.1` only, refuses any other bind address, and rejects requests that do not come
 > from and for your own machine. Keep it that way: do not put it behind a proxy, a tunnel or a container port mapping.
 
+![Recording of the lab: the SQL injection challenge, then a search for ' OR 1=1-- in Quillbook shows other people's invoices and captures the flag](docs/demo.gif)
+
+The recording is the real app, driven by `e2e/demo.cjs`. Below: the challenge list with all ten flags captured and four holes fixed.
+
 ![The challenge list with all ten flags captured and four holes fixed](docs/screenshots/progress.png)
 
 ## Quickstart
@@ -171,6 +175,21 @@ python -m breachlab --no-reload &
 node e2e/solve.cjs          # wipes lab progress first; uses Mallory's site on port 4161
 ```
 
+## Compared with the alternatives
+
+BreachLab is small and Python-only on purpose. Other tools are better at things it does not try to do:
+
+| | Good at | Pick it over BreachLab when |
+|---|---|---|
+| [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/) | A huge, modern single-page app with 100+ challenges and a scoreboard | You want breadth, CTF events, or a Node/Angular target |
+| [DVWA](https://github.com/digininja/DVWA) | The classic PHP target with low/medium/high difficulty levels | You want to practise the same bug at several difficulty levels in PHP |
+| [WebGoat](https://github.com/WebGoat/WebGoat) | Guided lessons on Java with explanations | You are learning Java or Spring |
+| [PortSwigger Web Security Academy](https://portswigger.net/web-security) | Free, in-depth, browser-hosted labs and write-ups | You want depth on a topic, or labs that need no local setup |
+
+BreachLab's niche: a Python codebase you can read in an afternoon, nothing to install but Flask, and a
+fix stage that runs a test against the code you patched, so you practise defending as well as attacking.
+It has ten challenges, not hundreds, and it is not a replacement for any of the above.
+
 ## Known limits
 
 - XSS flags are detected when your payload calls `alert()`, `confirm()` or `prompt()`. Script that
@@ -189,6 +208,10 @@ node e2e/solve.cjs          # wipes lab progress first; uses Mallory's site on p
 - More bug classes: command injection, XXE, insecure deserialization, race conditions, clickjacking.
 - A defence-in-depth stage per challenge (Content-Security-Policy, cookie flags, framework CSRF protection).
 - Verified Windows support.
+
+## Contributing
+
+Bug reports, new challenges and fixes are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

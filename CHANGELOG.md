@@ -19,6 +19,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Launch material: a demo GIF (`docs/demo.gif`, recorded from the real app by `e2e/demo.cjs`), a comparison with
+  Juice Shop, DVWA, WebGoat and PortSwigger's academy, `CONTRIBUTING.md` and issue templates.
 - Mallory's site, a built-in attacker website for the CSRF challenge. It was the only challenge that
   sent the learner off to write a file and start a second server. Now the challenge page has a box for
   the attacker page; "Save page" stores it in `.breachlab/attacker.html` and the lab serves it at `/`
@@ -34,6 +36,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A request that had opened `app.db` just before a reset swapped it (the "readonly database" case noted below)
+  now gets a 503 "Reload the page" notice instead of a 500. Test: `test_a_request_caught_by_a_reset_gets_a_retry_notice_not_a_500`.
 - Reliability pass (found by fuzzing odd input and hammering a running server with 24 parallel
   learners):
   - `/invoices/99999999999999999999` was a 500 (`OverflowError` from SQLite's 64-bit integers); it is a 404.
