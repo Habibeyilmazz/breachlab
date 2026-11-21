@@ -32,6 +32,11 @@ def test_challenge_page_shows_story_hints_and_fix_instructions(challenge, make_c
     assert "Why this fix works" in page
 
 
+def test_progress_page_says_when_the_reference_fixes_are_running(make_client):
+    assert "running the reference fixes" in text(make_client("solutions", login=False).get("/lab"))
+    assert "running the reference fixes" not in text(make_client("vulnerable", sqli="solutions").get("/lab"))
+
+
 def test_unknown_challenge_is_a_404(make_client):
     client = make_client(login=False)
     assert client.get("/lab/c/nope").status_code == 404
@@ -50,7 +55,8 @@ def test_xss_beacon_captures_only_for_the_pages_with_an_xss_challenge(make_clien
     client = make_client()
     assert client.post("/lab/xss", json={"path": "/account"}).get_json() == {"captured": None}
     assert captured() == set()
-    assert client.post("/lab/xss", json={"path": "/notes"}).get_json()["captured"] == "Stored XSS"
+    first = client.post("/lab/xss", json={"path": "/notes"}).get_json()
+    assert (first["captured"], first["url"]) == ("Stored XSS", "/lab/c/stored_xss") and first["flag"].startswith("BL{")
     assert client.post("/lab/xss", json={"path": "/notes"}).get_json() == {"captured": None}
     assert client.post("/lab/xss", json={"path": "/help"}).get_json()["captured"] == "Reflected XSS"
     assert captured() == {"stored_xss", "reflected_xss"}
@@ -109,6 +115,13 @@ def test_account_rejects_empty_name_and_bad_email(make_client):
     client = make_client()
     assert "cannot be empty" in text(client.post("/account", data={"display_name": " ", "email": "a@b.test"}))
     assert "email address" in text(client.post("/account", data={"display_name": "A", "email": "nope"}))
+
+
+def test_import_preview_keeps_the_user_signed_in(make_client):
+    client = make_client()
+    page = text(client.post("/invoices/import", data={"url": "http://localhost/login"}))
+    assert "HTTP 200" in page and "Sign out" in page
+    assert "Sign out" in text(client.get("/invoices"))
 
 
 def test_internal_keys_are_refused_to_browsers(make_client, captured):

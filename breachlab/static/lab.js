@@ -20,11 +20,11 @@
     };
   }
 
-  function announce({ captured, url }) {
-    const banner = document.createElement("p");
-    banner.className = "flagbanner";
-    banner.append("Flag captured: ", Object.assign(document.createElement("strong"), { textContent: captured }), " ");
-    banner.append(Object.assign(document.createElement("a"), { href: url, textContent: "Now fix it" }));
+  function announce({ captured, flag, url }) {
+    const element = (tag, properties) => Object.assign(document.createElement(tag), properties);
+    const banner = element("p", { className: "flagbanner" });
+    banner.append("Flag captured: ", element("strong", { textContent: captured }), " ");
+    banner.append(element("code", { textContent: flag }), " ", element("a", { href: url, textContent: "Now fix it" }));
     document.getElementById("lab-announce")?.append(banner);
   }
 

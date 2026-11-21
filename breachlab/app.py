@@ -194,6 +194,7 @@ def create_app(data_dir=None, impl=None):
                 "progress": done,
                 "solved": sum(1 for row in done.values() if row["solved_at"]),
                 "fresh": [BY_ID[i] for i in fresh if i in BY_ID],
+                "reference_fixes": all(m.__name__.startswith("breachlab.solutions.") for m in vars(impl_()).values()),
             }
 
         return {"lab_status": lab_status, "csrf_token": session.get("csrf", ""), "origin": own_origin()}
@@ -301,7 +302,8 @@ def create_app(data_dir=None, impl=None):
             return SANDBOX_NOTICE
         path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
         headers = {"X-Internal-Token": current_app.config["INTERNAL_TOKEN"]}
-        response = current_app.test_client().get(path, headers=headers)
+        with current_app.app_context():  # a fresh `g`, so the inner request cannot disturb this one
+            response = current_app.test_client().get(path, headers=headers)
         return f"HTTP {response.status_code}\n\n{response.get_data(as_text=True)[:4000]}"
 
     @app.route("/invoices/import", methods=["GET", "POST"])
@@ -461,6 +463,9 @@ def create_app(data_dir=None, impl=None):
         if not store.award(lab(), challenge_id):
             return jsonify(captured=None)
         store.pop_fresh(lab())  # lab.js shows the banner itself
-        return jsonify(captured=BY_ID[challenge_id].title, url=url_for("lab_challenge", challenge_id=challenge_id))
+        challenge = BY_ID[challenge_id]
+        return jsonify(
+            captured=challenge.title, flag=challenge.flag, url=url_for("lab_challenge", challenge_id=challenge_id)
+        )
 
     return app

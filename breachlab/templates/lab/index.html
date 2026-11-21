@@ -8,6 +8,8 @@
     function, patch it, and a test tells you whether the hole is closed.</p>
   <p class="lab-warning"><strong>Keep this on your own machine.</strong> BreachLab is vulnerable on purpose. It only
     answers on 127.0.0.1 and must never be deployed or exposed to a network.</p>
+  {% if lab.reference_fixes %}<p class="lab-note" role="status">This server is running the reference fixes
+    (<code>--fixed</code>), so every attack should fail. Restart without <code>--fixed</code> to practise.</p>{% endif %}
   {% if request.args.get('reset') %}<p class="lab-note" role="status">The lab was reset.</p>{% endif %}
 
   <ol class="caselist">

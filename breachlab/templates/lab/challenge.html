@@ -28,7 +28,7 @@
   <section class="stage" aria-labelledby="stage2">
     <h2 id="stage2"><span class="stage-step">2</span> Fix it
       <span class="stamp {{ 'stamp-fixed' if state and state.fixed_at else 'stamp-open' }}">{{ 'Fixed' if state and state.fixed_at else 'Not fixed yet' }}</span></h2>
-    {% if not captured and not report %}
+    {% if not captured and not report and not (state and state.fixed_at) %}
     <p class="lab-muted">Capture the flag first. Fixing a hole is easier once you have used it.</p>
     {% endif %}
     <p>The hole is in one function: <code>{{ challenge.function }}</code> in

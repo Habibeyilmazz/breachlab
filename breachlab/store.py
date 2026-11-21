@@ -64,7 +64,7 @@ INVOICES = [
 NOTES = [
     (3, "Welcome to the team board, Alice. Everyone in the workspace can read what you post here."),
     (2, "Reminder: the billing keys are served at /internal/keys. That address only answers the app server itself."),
-    (3, "Exports are plain text files named invoice-<number>.txt. Payroll lives next door in private/, hands off."),
+    (3, "Exports are plain text files, invoice-1001.txt and so on. Payroll lives next door in private/, hands off."),
 ]
 
 
