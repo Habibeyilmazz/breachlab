@@ -192,10 +192,20 @@ def create_app(data_dir=None, impl=None):
         """Safety rail: serve this machine only, whatever address the server was bound to."""
         if not is_local_request():
             abort(403, "BreachLab only answers requests from and for this machine.")
+        # A website the learner visits must not drive the holes (a link to the reflected XSS, a framed button).
+        # The CSRF challenge's page on another port of this host is same-site; curl sends no such header.
+        if request.headers.get("Sec-Fetch-Site") == "cross-site":
+            abort(403, "BreachLab does not answer requests started by other websites. Type its address yourself.")
         # The lab's own buttons (reset, verify) must not be forgeable from other origins.
         if request.method == "POST" and request.path.startswith("/lab"):
             if request.headers.get("Origin", own_origin()) != own_origin():
                 abort(403, "Lab actions must come from the lab's own pages.")
+
+    @app.after_request
+    def no_framing(response):
+        # Clickjacking guard for browsers that do not send Sec-Fetch-Site.
+        response.headers["X-Frame-Options"] = "DENY"
+        return response
 
     @app.before_request
     def load_user():

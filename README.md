@@ -117,6 +117,12 @@ These are part of the lab, not part of any challenge:
   server was started, every request is refused unless the client address is loopback and the `Host`
   header is `127.0.0.1`, `localhost` or `[::1]`. The Host check also blocks DNS rebinding from a
   hostile website open in the same browser.
+- **Other websites cannot drive it.** A request the browser marks `Sec-Fetch-Site: cross-site` (a
+  link on some website to the reflected XSS, a page framing the reset button) gets a 403, and no page
+  can be framed (`X-Frame-Options: DENY`). Type the lab's address yourself; a link clicked on another
+  site, this README on GitHub included, is refused too. The CSRF challenge's attacker page on another
+  port of the same host is same-site, so it still works. Browsers without `Sec-Fetch-Site` (Safari
+  before 16.4) only get the framing guard.
 - **No outbound connections.** The SSRF challenge is real from the learner's side, but the "fetch" is
   sandboxed: a URL that points back at the lab is dispatched in-process, and anything else gets a
   notice instead of a request. The lab cannot be used to reach your network. One caveat: a correct

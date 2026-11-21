@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- Any website open in the learner's browser could drive the deliberately vulnerable app: a link
+  to `/help?q=<script>…` ran script in the lab's origin (cookies are `SameSite=Lax`, so a top-level
+  navigation is signed in), and a cross-site iframe of `/lab` passed the same-origin check on the
+  reset button. Requests marked `Sec-Fetch-Site: cross-site` now get a 403 and every response
+  carries `X-Frame-Options: DENY`. Tests: `test_other_websites_cannot_drive_the_lab`,
+  `test_pages_cannot_be_framed`; also checked in Chromium from a page on `localhost:4163`.
+- CI pins every action to a full commit SHA (tag in a comment) and checks out with
+  `persist-credentials: false`, so later steps never see the job token.
+
 ### Added
 
 - A dark theme for the lab pages and Quillbook, picked from the system's `prefers-color-scheme`.
@@ -52,6 +63,11 @@ All notable changes to this project are documented here. The format follows
   followed literally in Chromium, patch / "Check my fix" / `pytest fix_tests -k`, a syntax error and
   recovery, `--fixed`, `--host ::1`, `--host localhost`, a refused `--host 0.0.0.0`, a busy port,
   and the README's e2e steps all work as written.
+- Security pass (2026-11-22): `pip-audit -r requirements-dev.txt` and `npm audit` in `e2e/` found
+  nothing; no secrets or personal data in git history; reference fixes in `solutions/` reviewed, no
+  new holes found. The rails' remaining gaps are the ones listed in the README (DNS lookups by the
+  SSRF fix, Safari before 16.4 without `Sec-Fetch-Site`). When you bump an action, update the SHA
+  and the tag comment together (`gh api repos/<owner>/<action>/commits/<tag> --jq .sha`).
 - Flag detection is where the bugs were. When you add a challenge, ask what else in the app can
   reach its "success" state legitimately (another challenge's side effect, a failed request) and
   add a test like `test_a_genuine_admin_token_is_not_a_forgery`.

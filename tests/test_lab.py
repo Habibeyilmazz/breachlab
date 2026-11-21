@@ -272,6 +272,23 @@ def test_lab_actions_cannot_be_forged_from_another_origin(make_client, captured)
     assert client.post("/lab/reset", data={"what": "data"}, headers={"Origin": "http://localhost"}).status_code == 302
 
 
+def test_other_websites_cannot_drive_the_lab(make_client, captured):
+    # A page on the internet the learner happens to visit links to the reflected XSS or frames the reset button.
+    client = make_client()
+    cross = {"Sec-Fetch-Site": "cross-site"}
+    assert client.get("/help?q=<script>alert(1)</script>", headers=cross).status_code == 403
+    assert client.get("/lab", headers={**cross, "Sec-Fetch-Dest": "iframe"}).status_code == 403
+    assert client.get("/invoices/2001", headers=cross).status_code == 403
+    assert captured() == set()
+    # The CSRF challenge's attacker page on another port of the same host is same-site, and typed addresses are "none".
+    for site in ("same-site", "same-origin", "none"):
+        assert client.get("/invoices/2001", headers={"Sec-Fetch-Site": site}).status_code == 200
+
+
+def test_pages_cannot_be_framed(make_client):
+    assert make_client(login=False).get("/lab").headers["X-Frame-Options"] == "DENY"
+
+
 def test_traversal_never_reads_outside_the_lab_data_folder(make_client, tmp_path_factory):
     outside = tmp_path_factory.mktemp("outside") / "secret.txt"
     outside.write_text("really private")
