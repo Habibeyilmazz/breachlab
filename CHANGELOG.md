@@ -17,6 +17,21 @@ All notable changes to this project are documented here. The format follows
 - CI pins every action to a full commit SHA (tag in a comment) and checks out with
   `persist-credentials: false`, so later steps never see the job token.
 
+### Changed
+
+- Performance, accessibility and maintainability pass. Measured first: cold start to first response
+  0.25 s; `/lab` 8.9 kB at 1.6 ms, `style.css` 12 kB, `lab.js` 1.5 kB, no third-party requests, one runtime
+  dependency (Flask); full test suite 19 s. Nothing worth optimising, so nothing was. Unused code check:
+  `ruff` (F rules) is clean and there is no unused dependency.
+- axe-core 4.10 (WCAG 2.0 to 2.2 A/AA plus best practices) run in Chromium over every Quillbook and lab page,
+  light and dark, at 1200 px and 320 px. Found and fixed: the lab bar was a second `banner` landmark next to
+  Quillbook's header (now a labelled `nav`), and the invoice, credit and admin tables forced horizontal
+  page scroll at 320 px (now each sits in a keyboard-focusable, labelled scroll region). After the fix: zero
+  violations, no horizontal page scroll. Test: `test_quillbook_pages_have_one_banner_and_scrollable_tables_are_focusable`.
+- `docs/demo.gif` re-recorded from the running app; it shows eleven seals and "0 of 11 flags".
+- Not changed: the race check can still be passed by luck with a narrowed-window half-fix (documented in README);
+  Windows and Safari remain untested.
+
 ### Added
 
 - Challenge 11, race condition. Alice has a single-use voucher, `QB-WELCOME-10`; the Account page
