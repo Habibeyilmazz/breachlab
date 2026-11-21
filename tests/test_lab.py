@@ -29,7 +29,7 @@ def text(response):
 def test_progress_page_lists_every_challenge(make_client):
     page = text(make_client(login=False).get("/lab"))
     assert all(c.title in page for c in CHALLENGES)
-    assert "0 of 11 flags" in page and "never be deployed" in page
+    assert "0 of 12 flags" in page and "never be deployed" in page
 
 
 @pytest.mark.parametrize("challenge", CHALLENGES, ids=lambda c: c.id)
@@ -72,7 +72,7 @@ def test_unknown_challenge_is_a_404(make_client):
 def test_capturing_a_flag_shows_a_banner_once_and_updates_progress(make_client):
     client = make_client()
     first = text(client.get("/invoices/2001"))
-    assert "Flag captured" in first and "1 of 11 flags" in first
+    assert "Flag captured" in first and "1 of 12 flags" in first
     assert "Flag captured: " not in text(client.get("/invoices"))
     assert text(client.get("/lab")).count("stamp-captured") == 1
 
@@ -172,7 +172,7 @@ def test_data_survives_a_restart(tmp_path):
     lab.close()
     again = create_app(tmp_path)
     assert again.config["SECRET_KEY"] == secret
-    assert "1 of 11 flags" in text(again.test_client().get("/lab"))
+    assert "1 of 12 flags" in text(again.test_client().get("/lab"))
 
 
 # ---- a learner's broken patch must not take the lab down ----------------------------------

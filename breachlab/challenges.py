@@ -1,4 +1,4 @@
-"""The eleven challenges: story, goal, hints and where the vulnerable code lives.
+"""The twelve challenges: story, goal, hints and where the vulnerable code lives.
 
 Story, goal and hint strings are trusted HTML written here, never user input.
 """
@@ -276,6 +276,29 @@ CHALLENGES = [
             " clicks rarely land inside half a second; sending several requests from code does.",
             "Reset the app data, open the Account page, open the browser's developer console and run:"
             f" <code>{RACE_SNIPPET}</code> The credit history then shows the voucher more than once.",
+        ),
+    ),
+    Challenge(
+        id="command_injection",
+        title="Command injection",
+        weakness="User input pasted into a shell command line",
+        start="/help/mail-check",
+        function="ping_command",
+        flag="BL{semicolon-and-a-whole-new-command}",
+        story=(
+            "<p>Support kept getting &ldquo;my invoice emails never arrive&rdquo;, so a developer added a mail server"
+            " check to the help centre: you type your mail server's name and Quillbook pings it from its own servers.</p>"
+            "<p>The quickest way to run ping from Python is to build the command line as text and hand it to the"
+            " shell. Your text goes in the middle of that line.</p>"
+        ),
+        goal="Make the server's shell run a command of your choosing, not only ping.",
+        hints=(
+            "Ping <code>127.0.0.1</code> and read the reply: it is what ping prints. The server runs"
+            " <code>ping -c 1 <em>your text</em></code> through <code>/bin/sh</code>.",
+            "To a shell, <code>;</code>, <code>&amp;&amp;</code>, <code>|</code> and a new line each start another"
+            " command, and <code>$(&hellip;)</code> runs one and pastes in its output.",
+            "Enter <code>127.0.0.1; id</code> in the mail server check. BreachLab never really runs it: the lab reads"
+            " the command line and tells you what a real server would have run.",
         ),
     ),
 ]

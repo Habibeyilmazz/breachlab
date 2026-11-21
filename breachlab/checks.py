@@ -398,6 +398,29 @@ def check_race_condition(c):
     return attack, broken
 
 
+def check_command_injection(c):
+    attack = None
+    for host in (
+        "127.0.0.1; id",
+        "127.0.0.1 && id",
+        "127.0.0.1 | id",
+        "127.0.0.1\nid",  # beats a blocklist of ; & |
+        "$(id)",  # still runs inside double quotes
+        "`id`",
+        '127.0.0.1"; id; "',  # closes double quotes put around the host
+        "127.0.0.1 > /tmp/owned",
+    ):
+        if "would run more than ping" in _text(c.post("/help/mail-check", data={"host": host})):
+            attack = f"the host {host!r} made the shell run more than ping"
+            break
+    broken = None
+    for host in ("127.0.0.1", "mail.quillbook.test"):
+        reply = _text(c.post("/help/mail-check", data={"host": host}))
+        if f"64 bytes from {host}" not in reply:
+            broken = broken or f"pinging {host} should still show ping's reply"
+    return attack, broken
+
+
 CHECKS = {
     "sqli": check_sqli,
     "reflected_xss": check_reflected_xss,
@@ -410,4 +433,5 @@ CHECKS = {
     "weak_jwt": check_weak_jwt,
     "ssrf": check_ssrf,
     "race_condition": check_race_condition,
+    "command_injection": check_command_injection,
 }

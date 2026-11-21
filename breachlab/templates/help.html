@@ -13,5 +13,6 @@
   <dt>{{ question }}</dt><dd>{{ answer }}</dd>
   {% endfor %}
 </dl>
+{% if g.user %}<p>Invoice emails not arriving? <a href="{{ url_for('mail_check') }}">Check your mail server</a>.</p>{% endif %}
 {% if query and not matches %}<p class="qb-muted">Try a shorter search, or <a href="{{ url_for('help_centre') }}">browse all articles</a>.</p>{% endif %}
 {% endblock %}

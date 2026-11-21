@@ -8,6 +8,7 @@ own safety rails, which are not part of any challenge:
   * is_local_request     refuses non-local clients and unknown Host headers
   * fetch_sandboxed      the SSRF "network" is the app itself, called in-process
   * download_export      traversal can leave exports/ but never the lab's data folder
+  * run_sandboxed        the mail server check never runs a command, it only reads it
 """
 
 import hmac
@@ -15,6 +16,7 @@ import importlib
 import ipaddress
 import re
 import secrets
+import shlex
 import socket
 import sqlite3
 import subprocess
@@ -52,6 +54,7 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 HOST_HEADER = re.compile(r"(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?")
 USER_COLUMNS = {"username", "password_hash", "display_name", "email", "role", "credit_cents"}
 PROFILE_FIELDS = {"display_name", "email"}
+SHELLS = [["sh", "-c"], ["/bin/sh", "-c"], ["bash", "-c"], ["/bin/bash", "-c"]]
 EMAIL = re.compile(r"[^@\s]+@[^@\s]+")
 VOUCHER_PARTNER = {"QB-WELCOME-10"}  # codes the voucher partner still honours; QB-SPRING-25 was withdrawn
 SANDBOX_NOTICE = (
@@ -125,6 +128,70 @@ def is_local_request() -> bool:
     except ValueError:
         remote_ok = False
     return remote_ok and HOST_HEADER.fullmatch(request.host) is not None
+
+
+def shell_does_more(script: str) -> bool:
+    """True when /bin/sh, given `script`, would do more than run one command with plain arguments.
+
+    That is: chain or pipe another command (; & | newline), run a command substitution
+    ($(...) or backticks), or redirect to or from a file (< >). Quoting is honoured as a
+    POSIX shell does it: nothing is special inside '...', and only $( and ` are inside "...".
+    """
+    quote, escaped, previous = None, False, " "
+    for char, following in zip(script, script[1:] + " ", strict=True):
+        if escaped:
+            escaped = False
+        elif quote == "'":
+            quote = None if char == "'" else quote
+        elif char == "\\":
+            escaped = True
+        elif char == "`" or (char == "$" and following == "("):
+            return True
+        elif quote == '"':
+            quote = None if char == '"' else quote
+        elif char in "'\"":
+            quote = char
+        elif char in ";&|\n<>":
+            return True
+        elif char == "#" and previous in " \t":
+            return False  # the rest of the line is a comment
+        previous = char
+    return False
+
+
+def run_sandboxed(command):
+    """Safety rail: answer like subprocess.run(command, shell=isinstance(command, str)) would, without running it.
+
+    Returns (output, injected). `injected` is True when a real shell would have run more than ping.
+    Only ping is "known", and its reply is invented: no process is started and no packet is sent.
+    """
+    if isinstance(command, (list, tuple)) and len(command) == 3 and list(command[:2]) in SHELLS:
+        command = command[2]  # the shell, called by hand
+    if isinstance(command, str):
+        if shell_does_more(command):
+            return (
+                "Lab sandbox: BreachLab never runs commands. A real server would now hand this line to /bin/sh, "
+                f"which would run more than ping:\n\n    {command}\n\n"
+                "Every extra command runs as the web server's user, with its files, secrets and network access.",
+                True,
+            )
+        try:
+            command = shlex.split(command)
+        except ValueError as exc:
+            return f"sh: syntax error: {exc}", False
+    if not isinstance(command, (list, tuple)) or not command or not all(isinstance(arg, str) for arg in command):
+        return "Quillbook could not run that command.", False
+    if Path(command[0]).name != "ping":
+        return f"Lab sandbox: the mail server check only knows ping, so {command[0]!r} was not run.", False
+    host = command[-1]
+    if host.startswith("-") or not re.fullmatch(r"[A-Za-z0-9.:-]{1,253}", host):
+        return f"ping: cannot resolve {host}: Unknown host", False
+    return (
+        f"PING {host}: 56 data bytes\n64 bytes from {host}: icmp_seq=0 ttl=64 time=0.42 ms\n\n"
+        f"--- {host} ping statistics ---\n1 packets transmitted, 1 packets received, 0.0% packet loss\n\n"
+        "(Lab sandbox: a simulated reply. BreachLab never runs commands or sends packets.)",
+        False,
+    )
 
 
 def create_broken_app(details: str):
@@ -435,6 +502,21 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
         matches = [item for item in FAQ if query.lower() in " ".join(item).lower()]
         heading = impl_().reflected_xss.results_heading(query, len(matches)) if query else None
         return render_template("help.html", query=query, matches=matches, heading=heading)
+
+    @app.route("/help/mail-check", methods=["GET", "POST"])
+    @login_required
+    def mail_check():
+        host = request.form.get("host", "").strip()[:200]
+        output = error = None
+        if request.method == "POST" and host:
+            command = impl_().command_injection.ping_command(host)
+            if command is None:
+                error = "That is not a host name or an IP address."
+            else:
+                output, injected = run_sandboxed(command)
+                if injected:
+                    award("command_injection")
+        return render_template("mailcheck.html", host=host, output=output, error=error), 400 if error else 200
 
     # ---- Quillbook: account, admin, API ---------------------------------------------
 

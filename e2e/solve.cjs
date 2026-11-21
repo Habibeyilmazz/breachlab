@@ -4,7 +4,7 @@
 //   python -m breachlab --fixed --no-reload &  then   MODE=fixed node e2e/solve.cjs
 //
 // Default mode proves every exploit works and its flag is captured. MODE=fixed proves the
-// same attacks fail on the reference fixes and that "Check my fix" accepts all eleven.
+// same attacks fail on the reference fixes and that "Check my fix" accepts all twelve.
 // This wipes the lab's progress first. The CSRF step uses the lab's built-in attacker site (Mallory's
 // site), which the server runs on the next port (ATTACKER_PORT if you started it with --attacker-port).
 
@@ -18,7 +18,7 @@ const ATTACKER_PORT = Number(process.env.ATTACKER_PORT || Number(new URL(BASE).p
 const ATTACKER = `http://${new URL(BASE).hostname}:${ATTACKER_PORT}`;
 const FIXED = process.env.MODE === "fixed";
 const OUT = path.join(__dirname, "out");
-const IDS = ["sqli", "reflected_xss", "stored_xss", "idor", "path_traversal", "open_redirect", "mass_assignment", "csrf", "weak_jwt", "ssrf", "race_condition"];
+const IDS = ["sqli", "reflected_xss", "stored_xss", "idor", "path_traversal", "open_redirect", "mass_assignment", "csrf", "weak_jwt", "ssrf", "race_condition", "command_injection"];
 
 const b64 = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
@@ -158,6 +158,18 @@ async function main() {
   if (!FIXED) await page.locator(".flagbanner", { hasText: "Race condition" }).waitFor();
   await shot("07b-race-condition");
   await settle("race_condition");
+
+  // 12. Command injection: the last hint's host, typed into the mail server check found through the help centre.
+  await page.goto(`${BASE}/lab/c/command_injection`);
+  const host = await page.locator(".hints details").nth(2).locator("code").textContent();
+  await page.goto(`${BASE}/help`);
+  await page.getByRole("link", { name: "Check your mail server" }).click();
+  await page.getByLabel("Mail server name or IP address").fill(host);
+  await page.getByRole("button", { name: "Ping" }).click();
+  assert.equal((await body()).includes("would run more than ping"), !FIXED);
+  if (FIXED) assert.ok((await body()).includes("not a host name"), "the fix refuses the host");
+  await shot("07c-command-injection");
+  await settle("command_injection");
 
   assert.equal(await flags(), FIXED ? 0 : IDS.length);
   await shot("08-progress", { fullPage: true });

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import itertools
 import re
+import shlex
 import threading
 import time
 from types import SimpleNamespace
@@ -13,7 +14,7 @@ import pytest
 from markupsafe import Markup
 
 from breachlab import checks
-from breachlab.app import is_loopback_host, load_impl
+from breachlab.app import is_loopback_host, load_impl, run_sandboxed, shell_does_more
 from breachlab.challenges import BY_ID, CHALLENGES, UNSIGNED_ADMIN_TOKEN
 
 IDS = [c.id for c in CHALLENGES]
@@ -22,8 +23,8 @@ IDS = [c.id for c in CHALLENGES]
 BROWSER_DETECTED = {"reflected_xss", "stored_xss"}
 
 
-def test_there_are_eleven_challenges_with_three_hints_each():
-    assert len(CHALLENGES) == len(set(IDS)) == len(checks.CHECKS) == 11
+def test_there_are_twelve_challenges_with_three_hints_each():
+    assert len(CHALLENGES) == len(set(IDS)) == len(checks.CHECKS) == 12
     assert all(len(c.hints) == 3 and all(c.hints) for c in CHALLENGES)
 
 
@@ -194,6 +195,7 @@ def _redeem_under_a_lock(*args):
 
 
 HALF_FIXES = {
+    "command_injection": {"ping_command": lambda host: f"ping -c 1 {host.replace(';', '')}"},
     "race_condition": {"redeem_voucher": _claim_but_ignore_the_answer},
     "sqli": {"search_invoices": _escape_first_quote},
     "stored_xss": {"render_note": _strip_script_tags},
@@ -216,6 +218,7 @@ def test_half_fixes_do_not_pass_the_check(challenge_id, make_client):
 
 
 SOUND_ALTERNATIVES = {
+    "command_injection": {"ping_command": lambda host: f"ping -c 1 -- {shlex.quote(host)}"},  # a shell, quoted right
     "race_condition": {"redeem_voucher": _redeem_under_a_lock},  # closes it, if only within one process
     "reflected_xss": {"results_heading": lambda q, n: Markup("<b>{}</b>: {} found").format(q, n)},
     "stored_xss": {"render_note": lambda body: Markup('<span style="white-space: pre-line">{}</span>').format(body)},
@@ -319,3 +322,87 @@ def test_a_fix_that_skips_the_voucher_partner_is_not_accepted(make_client):
 
 def test_the_race_hint_is_the_answer():
     assert "QB-WELCOME-10" in BY_ID["race_condition"].hints[2] and "Promise.all" in BY_ID["race_condition"].hints[2]
+
+
+# ---- command injection ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "host",
+    ['127.0.0.1"; id; "', "$(id)", "`id`", "127.0.0.1\nid", "127.0.0.1 & id"],
+)
+def test_more_half_fixes_of_the_ping_command_do_not_pass(make_client, host):
+    quoted = _with(make_client, "command_injection", ping_command=lambda h: f'ping -c 1 "{h}"')
+    blocklist = _with(
+        make_client, "command_injection", ping_command=lambda h: None if set(h) & set(";&|") else f"ping -c 1 {h}"
+    )
+    assert quoted[0] is not None and blocklist[0] is not None
+
+
+@pytest.mark.parametrize(
+    "script, more",
+    [
+        ("ping -c 1 127.0.0.1", False), ("ping -c 1 -- '127.0.0.1; id'", False), ("ping -c 1 '$(id)'", False),
+        ("ping -c 1 \\; id", False), ("ping -c 1 \\$(id)", False), ("ping -c 1 \\\\; id", True),
+        ("ping a; id", True), ("ping a && id", True), ("ping a || id", True), ("ping a | id", True),
+        ("ping a & id", True), ("ping a\nid", True), ("ping $(id)", True), ("ping `id`", True),
+        ('ping "$(id)"', True), ('ping "a; id"', False), ('ping "a"; id', True), ("ping a > f", True),
+        ("ping a < f", True), ("ping a # ; id", False), ("ping a#; id", True), ("ping '\\'; id", True),
+    ],
+)  # fmt: skip
+def test_the_sandbox_reads_a_command_line_the_way_a_shell_would(script, more):
+    assert shell_does_more(script) is more
+
+
+def test_the_sandbox_answers_without_starting_a_process(make_client, monkeypatch, captured):
+    import subprocess
+
+    def refuse(*args, **kwargs):
+        raise AssertionError(f"the lab started a process: {args}")
+
+    monkeypatch.setattr(subprocess, "Popen", refuse)
+    client = make_client("vulnerable")
+    page = client.post("/help/mail-check", data={"host": "127.0.0.1; id"}).get_data(as_text=True)
+    assert "would run more than ping" in page and "127.0.0.1; id" in page
+    assert captured() == {"command_injection"}
+
+
+@pytest.mark.parametrize(
+    "command, reply",
+    [
+        (["ping", "-c", "1", "--", "127.0.0.1; id"], "cannot resolve"),  # no shell: one odd host name
+        (["sh", "-c", "ping -c 1 a; id"], "would run more than ping"),  # the shell, called by hand
+        (["ping", "-c", "1", "-f"], "cannot resolve"),
+        (["rm", "-rf", "/"], "only knows ping"),
+        ("ping 'unclosed", "syntax error"),
+        (None, "could not run"), ([], "could not run"), ([1, 2], "could not run"),
+    ],
+)  # fmt: skip
+def test_the_sandbox_handles_any_command_a_patch_returns(command, reply):
+    assert reply in run_sandboxed(command)[0]
+
+
+@pytest.mark.parametrize(
+    "host, ok",
+    [
+        ("127.0.0.1", True), ("::1", True), ("mail.quillbook.test", True), ("  mx1.example.com ", True),
+        ("127.0.0.1; id", False), ("$(id)", False), ("-f", False), ("a..b", False), ("-a.example", False),
+        ("", False), ("a" * 64 + ".test", False), ("mail.example.test\nid", False),
+    ],
+)  # fmt: skip
+def test_reference_command_fix_only_accepts_host_names_and_addresses(host, ok):
+    command = load_impl("solutions").command_injection.ping_command(host)
+    assert (command is not None) is ok
+    if ok:
+        assert command[:4] == ["ping", "-c", "1", "--"] and isinstance(command, list)
+
+
+def test_the_command_injection_hint_is_the_answer(make_client, captured):
+    answer = re.search(r"<code>(.*?)</code>", BY_ID["command_injection"].hints[2]).group(1)
+    make_client("vulnerable").post("/help/mail-check", data={"host": answer})
+    assert captured() == {"command_injection"}
+
+
+def test_the_mail_check_needs_a_signed_in_user(make_client):
+    response = make_client("vulnerable", login=False).post("/help/mail-check", data={"host": "127.0.0.1; id"})
+    assert response.status_code == 302 and "/login" in response.headers["Location"]

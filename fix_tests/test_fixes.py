@@ -1,7 +1,7 @@
 """The provided fix tests: one per challenge, each failing until its hole is closed.
 
     pytest fix_tests -k sqli      # the test for one challenge
-    pytest fix_tests              # all eleven; a fresh checkout shows eleven failures, your to-do list
+    pytest fix_tests              # all twelve; a fresh checkout shows twelve failures, your to-do list
 
 They test the code in breachlab/vulnerable/ (your working copy). Set BREACHLAB_IMPL=solutions
 to run them against the reference fixes instead.
