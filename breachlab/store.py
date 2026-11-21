@@ -197,6 +197,10 @@ def pop_fresh(lab):
     return ids
 
 
-def reset_progress(lab):
+def reset_progress(lab, challenge_id=None):
+    """Forget captured flags and fix results: all of them, or one challenge's."""
     with lab:
-        lab.execute("DELETE FROM progress")
+        if challenge_id is None:
+            lab.execute("DELETE FROM progress")
+        else:
+            lab.execute("DELETE FROM progress WHERE id = ?", (challenge_id,))

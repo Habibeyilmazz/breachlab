@@ -84,6 +84,28 @@
     </details>
   </section>
 
+  {% if not lab.reference_fixes %}{# with --fixed, the vulnerable files are not what is being served #}
+  {% set file = 'breachlab/vulnerable/' ~ challenge.id ~ '.py' %}
+  <section class="restart" id="restart" aria-labelledby="restart-title">
+    <h2 id="restart-title">Start this challenge over</h2>
+    <p class="lab-muted">Puts the original vulnerable code back in <code>{{ file }}</code> (your changes to that file
+      are lost), restores the sample data and clears this challenge's flag and fix result, so you can break it again.</p>
+    {% set restarted = request.args.restarted %}
+    {% if restarted == 'restored' %}
+    <p class="lab-note" role="status">Started over. The original code is back in <code>{{ file }}</code> and the server
+      restarts by itself to load it.</p>
+    {% elif restarted == 'unchanged' %}
+    <p class="lab-note" role="status">Started over. <code>{{ file }}</code> was already the original code.</p>
+    {% elif restarted == 'no-git' %}
+    <p class="lab-note" role="status">Flag and fix result cleared, but <code>{{ file }}</code> could not be put back:
+      that needs git and the git checkout from the quickstart. Undo your changes to the file by hand.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('lab_restart', challenge_id=challenge.id) }}">
+      <button class="lab-btn lab-btn-danger" data-confirm="Discard your changes to {{ file }} and start {{ challenge.title }} over?">Start over</button>
+    </form>
+  </section>
+  {% endif %}
+
   {% if following %}
   <p class="lab-next">Next: <a href="{{ url_for('lab_challenge', challenge_id=following.id) }}">{{ following.title }}</a></p>
   {% endif %}

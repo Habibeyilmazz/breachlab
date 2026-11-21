@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (feature round 12)
+
+- "Start over" on every challenge page. Once a learner had fixed a hole there was no way back to the
+  vulnerable code from the lab: "Reset data and progress" cleared the flags but left the patched files, so
+  those flags could not be captured again, and a botched patch needed git knowledge to undo. The button
+  (with a confirm) runs `git checkout HEAD -- breachlab/vulnerable/<id>.py`, reseeds the sample data (a
+  stored payload would otherwise re-award the flag at once) and clears that one challenge's flag and fix
+  result; other flags are kept. Outside a git checkout it clears progress and says to undo the file by hand.
+  Hidden on a `--fixed` server. Route `POST /lab/c/<id>/restart`, same-origin like every lab action.
+- The checkout runs after the response is sent (`call_on_close`): the reloader kills the serving process as
+  soon as it sees the file change, and a first version doing it inside the request had its reply cut off
+  in Chromium. It uses `git diff-index`, because outside a repository `git diff` silently compares files
+  instead of failing (caught by the no-git test).
+- Tests: `test_starting_a_challenge_over_restores_its_code_data_and_progress` and
+  `test_starting_over_without_git_clears_progress_and_leaves_the_file_alone` (throwaway git repos, never the
+  real files), and `test_starting_over_on_a_real_server_answers_then_reloads_the_original_code` (a copied
+  checkout, a real server with the reloader on port 4167, Mallory on 4166). Checked by hand in Chromium on
+  the real checkout: fix SQL injection, "Check my fix" says Fixed, "Start over", confirm, the note appears,
+  and after the reload "Check my fix" says "Not fixed yet" again; light, dark and 390 px.
+- Not changed: the 404 page still uses Flask's stock wording; Windows, Safari and Lighthouse remain unchecked.
+
 ### Security (security pass, round 11)
 
 - `FLASK_DEBUG=1` in the learner's shell turned on Werkzeug's debugger: `/console` answered with a

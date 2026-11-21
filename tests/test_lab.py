@@ -45,6 +45,9 @@ def test_challenge_page_shows_story_hints_and_fix_instructions(challenge, make_c
 def test_progress_page_says_when_the_reference_fixes_are_running(make_client):
     assert "running the reference fixes" in text(make_client("solutions", login=False).get("/lab"))
     assert "running the reference fixes" not in text(make_client("vulnerable", sqli="solutions").get("/lab"))
+    # "Start over" puts back vulnerable code, which a --fixed server does not serve.
+    assert "Start this challenge over" not in text(make_client("solutions", login=False).get("/lab/c/sqli"))
+    assert "Start this challenge over" in text(make_client(login=False).get("/lab/c/sqli"))
 
 
 def test_hints_use_the_address_the_learner_is_browsing(make_client):
@@ -98,6 +101,58 @@ def test_reset_restores_data_and_keeps_progress_unless_asked(make_client, captur
     assert captured() == {"idor"}
     client.post("/lab/reset", data={"what": "everything"})
     assert captured() == set()
+
+
+@pytest.fixture
+def checkout(tmp_path_factory):
+    """A throwaway git checkout holding one 'vulnerable' module, so tests never touch the real ones."""
+    folder = tmp_path_factory.mktemp("vulnerable")
+    (folder / "idor.py").write_text("ORIGINAL = True\n", encoding="utf-8")
+    git = ["git", "-C", str(folder), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+    for args in (["init", "-q"], ["add", "."], ["commit", "-qm", "original"]):
+        subprocess.run([*git, *args], check=True)
+    return folder
+
+
+def test_starting_a_challenge_over_restores_its_code_data_and_progress(make_client, captured, checkout, monkeypatch):
+    monkeypatch.setattr("breachlab.app.VULNERABLE_DIR", checkout)
+    (checkout / "idor.py").write_text("PATCHED = True\n", encoding="utf-8")
+    client = make_client("vulnerable", idor="solutions")
+    client.get("/invoices", query_string={"q": "' OR 1=1--"})
+    client.post("/lab/c/idor/verify")
+    lab = store.connect(client.application.config["DATA_DIR"] / "lab.db")
+    store.award(lab, "idor")
+    lab.close()
+    client.post("/notes", data={"body": "my payload"})
+    assert captured() == {"sqli", "idor"}
+
+    response = client.post("/lab/c/idor/restart")
+    assert response.status_code == 302 and response.location.endswith("/lab/c/idor?restarted=restored#restart")
+    assert (checkout / "idor.py").read_text(encoding="utf-8") == "PATCHED = True\n"  # the reloader would cut the reply
+    response.close()  # the server closes it once the reply is sent
+    assert (checkout / "idor.py").read_text(encoding="utf-8") == "ORIGINAL = True\n"
+    assert client.post("/lab/c/idor/restart").location.endswith("restarted=unchanged#restart")
+    assert captured() == {"sqli"}  # other challenges keep their flags
+    assert "my payload" not in text(client.get("/notes"))
+    page = text(client.get("/lab/c/idor?restarted=restored"))
+    assert "The original code is back in" in page and "stamp-fixed" not in page
+    assert "already the original" in text(client.get("/lab/c/idor?restarted=unchanged"))
+    assert client.post("/lab/c/nope/restart").status_code == 404
+    assert client.post("/lab/c/idor/restart", headers={"Origin": "http://127.0.0.1:8001"}).status_code == 403
+
+
+def test_starting_over_without_git_clears_progress_and_leaves_the_file_alone(
+    make_client, captured, tmp_path, monkeypatch
+):
+    monkeypatch.setattr("breachlab.app.VULNERABLE_DIR", tmp_path)  # not a git checkout
+    (tmp_path / "idor.py").write_text("PATCHED = True\n", encoding="utf-8")
+    client = make_client()
+    client.get("/invoices/2001")
+    response = client.post("/lab/c/idor/restart")
+    response.close()
+    assert response.location.endswith("restarted=no-git#restart") and captured() == set()
+    assert (tmp_path / "idor.py").read_text(encoding="utf-8") == "PATCHED = True\n"
+    assert "could not be put back" in text(client.get("/lab/c/idor?restarted=no-git"))
 
 
 def test_data_survives_a_restart(tmp_path):
@@ -169,6 +224,44 @@ def test_saving_a_syntax_error_does_not_kill_the_server(tmp_path):
             assert b"Win a free coffee!" in response.read()
     finally:
         server.terminate()  # the reloader parent takes its serving child down with it
+        server.wait(timeout=10)
+
+
+def test_starting_over_on_a_real_server_answers_then_reloads_the_original_code(tmp_path):
+    """The real thing: a git checkout, a server with the reloader, a fixed idor.py, then "Start over"."""
+    port = 4167
+    shutil.copytree(PACKAGE_DIR, tmp_path / "breachlab", ignore=shutil.ignore_patterns("__pycache__"))
+    git = ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+    for args in (["init", "-q"], ["add", "breachlab"], ["commit", "-qm", "original"]):
+        subprocess.run([*git, *args], check=True)
+    module = tmp_path / "breachlab" / "vulnerable" / "idor.py"
+    original = module.read_text(encoding="utf-8")
+    module.write_text((PACKAGE_DIR / "solutions" / "idor.py").read_text(encoding="utf-8"), encoding="utf-8")
+
+    def post(path):
+        for _attempt in range(100):
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", data=b"", timeout=10) as response:
+                    return response.read().decode()
+            except (OSError, http.client.HTTPException):  # not listening yet
+                assert server.poll() is None, "the server exited"
+                time.sleep(0.2)
+        raise AssertionError(f"no answer from {path}")
+
+    server = subprocess.Popen(
+        [sys.executable, "-m", "breachlab", "--port", str(port), "--attacker-port", "4166"], cwd=tmp_path
+    )
+    try:
+        assert "The attack is blocked" in post("/lab/c/idor/verify")
+        assert "The original code is back in" in post("/lab/c/idor/restart")  # answered before the reload
+        for _attempt in range(50):  # git puts the file back, then the reloader restarts the server on it
+            if module.read_text(encoding="utf-8") == original and "Not fixed yet." in post("/lab/c/idor/verify"):
+                break
+            time.sleep(0.2)
+        else:
+            raise AssertionError("still serving the patched code")
+    finally:
+        server.terminate()
         server.wait(timeout=10)
 
 

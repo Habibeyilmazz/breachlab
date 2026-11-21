@@ -60,6 +60,13 @@ why the hole existed, why the fix works, and the general pattern to use in real 
 page can show it (behind a spoiler), and `python -m breachlab --fixed` runs the whole app on the
 reference fixes so you can watch your attacks fail.
 
+**3. Start over, if you like.** The "Start over" button at the bottom of each challenge page puts the
+original vulnerable function back (`git checkout HEAD -- breachlab/vulnerable/<challenge>.py`, so your
+changes to that file are lost), restores the sample data and clears that challenge's flag and fix result.
+Use it to break a challenge again, or to throw away a patch that went wrong. It needs the git checkout from
+the quickstart; without git it still clears the progress and tells you to undo the file by hand. If you
+committed your patch, HEAD is your patch, and there is nothing to put back.
+
 ## The eleven challenges
 
 | # | Challenge | Where in Quillbook | Function you patch |
@@ -92,6 +99,7 @@ reference fixes so you can watch your attacks fail.
 - A progress page showing which holes you have broken and which you have fixed, also visible as a
   strip of squares, one per challenge, in the bar above every page.
 - Reset buttons: restore the sample data (keeps your flags), or wipe data and progress.
+- "Start over" per challenge: original vulnerable code back from git, sample data restored, that challenge's progress cleared.
 - `--fixed` mode to run the app on the reference fixes.
 - Light and dark themes that follow your system setting, a phone-width layout, and keyboard focus you can see.
 

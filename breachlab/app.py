@@ -17,6 +17,7 @@ import re
 import secrets
 import socket
 import sqlite3
+import subprocess
 import time
 from functools import wraps
 from pathlib import Path
@@ -46,6 +47,7 @@ from .challenges import BY_ID, CHALLENGES, FLAGS
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = PACKAGE_DIR.parent / ".breachlab"
+VULNERABLE_DIR = PACKAGE_DIR / "vulnerable"
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 HOST_HEADER = re.compile(r"(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?")
 USER_COLUMNS = {"username", "password_hash", "display_name", "email", "role", "credit_cents"}
@@ -140,6 +142,17 @@ def create_broken_app(details: str):
         return Response(text, 500, mimetype="text/plain")
 
     return app
+
+
+def git_file(path: Path, *command):
+    """Run a git command on one file of the checkout; returns its exit code, or None without git."""
+    try:
+        run = subprocess.run(
+            ["git", "-C", str(path.parent), *command, "--", path.name], capture_output=True, timeout=10
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return run.returncode
 
 
 def money(value):
@@ -572,6 +585,22 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
         report = checks.run(challenge_id, impl_())
         store.set_fixed(lab(), challenge_id, report.ok)
         return challenge_page(challenge_id, report)
+
+    @app.post("/lab/c/<challenge_id>/restart")
+    def lab_restart(challenge_id):
+        """Replay a challenge: the original vulnerable code, the sample data, and no flag or fix result for it."""
+        if challenge_id not in BY_ID:
+            abort(404, "No such challenge.")
+        module = VULNERABLE_DIR / f"{challenge_id}.py"
+        # diff-index, not diff: outside a git checkout "git diff" quietly compares files instead of failing.
+        outcome = {0: "unchanged", 1: "restored"}.get(git_file(module, "diff-index", "--quiet", "HEAD"), "no-git")
+        store.seed_app(data_dir)  # otherwise a stored payload or an earlier exploit's data re-awards the flag at once
+        store.reset_progress(lab(), challenge_id)
+        response = redirect(url_for("lab_challenge", challenge_id=challenge_id, restarted=outcome) + "#restart")
+        if outcome == "restored":
+            # Only once the response is out: the reloader kills this process as soon as it sees the file change.
+            response.call_on_close(lambda: git_file(module, "checkout", "HEAD"))
+        return response
 
     @app.post("/lab/attacker")
     def lab_attacker():
