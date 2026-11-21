@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
+from flask import got_request_exception
+
 from . import store
 from .store import LEARNER
 
@@ -36,13 +38,19 @@ def run(challenge_id, impl) -> Report:
     """Check one challenge against the implementation modules in `impl`, on throwaway data."""
     from .app import create_app
 
+    crashes = []  # exceptions the patched code raised while serving a request (each one became a 500 page)
     with tempfile.TemporaryDirectory(prefix="breachlab-check-") as tmp:
-        client = create_app(tmp, impl).test_client()
+        app = create_app(tmp, impl)
         try:
-            _login(client)
-            return Report(*CHECKS[challenge_id](client))
+            with got_request_exception.connected_to(lambda _sender, exception, **_: crashes.append(exception), app):
+                client = app.test_client()
+                _login(client)
+                report = Report(*CHECKS[challenge_id](client))
         except Exception as exc:  # a crash in patched code is a failed check, not a crashed lab
             return Report(None, f"the check crashed: {exc!r}")
+    if crashes and report.broken:
+        report.broken += f" (your code raised {crashes[0]!r}; the traceback is in the terminal)"
+    return report
 
 
 def _login(client, next_url=None):

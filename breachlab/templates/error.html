@@ -3,7 +3,13 @@
 {% block content %}
 <div class="qb-narrow">
   <h1>{{ error.code }} {{ error.name }}</h1>
+  {% if cause %}
+  <p>The code behind this page raised an exception. If you just patched it, this is your bug:</p>
+  <pre class="qb-preview">{{ cause.__class__.__name__ }}: {{ cause }}</pre>
+  <p class="qb-muted">The full traceback is in the terminal where BreachLab is running.</p>
+  {% else %}
   <p>{{ error.description }}</p>
+  {% endif %}
   <p><a href="{{ url_for('home') }}">Back to Quillbook</a></p>
 </div>
 {% endblock %}

@@ -14,7 +14,7 @@ from breachlab.app import is_loopback_host, load_impl
 from breachlab.challenges import CHALLENGES
 
 IDS = [c.id for c in CHALLENGES]
-# These two flags are captured by script running in a real browser (see e2e/solve.mjs);
+# These two flags are captured by script running in a real browser (see e2e/solve.cjs);
 # here the attack is proven by the payload arriving unescaped in the HTML.
 BROWSER_DETECTED = {"reflected_xss", "stored_xss"}
 

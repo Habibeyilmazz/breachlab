@@ -2,10 +2,11 @@
 
 import argparse
 import sys
+import traceback
 
 from werkzeug.serving import is_running_from_reloader
 
-from .app import LOOPBACK_HOSTS, create_app, load_impl
+from .app import LOOPBACK_HOSTS, create_app, create_broken_app, load_impl
 
 
 def loopback_address(host: str) -> str:
@@ -32,7 +33,14 @@ def main(argv=None):
             f"Refusing to bind to {args.host!r}: BreachLab is vulnerable on purpose and only runs on "
             "127.0.0.1 or ::1. Never expose it to a network."
         )
-    app = create_app(impl=load_impl("solutions" if args.fixed else "vulnerable"))
+    try:
+        app = create_app(impl=load_impl("solutions" if args.fixed else "vulnerable"))
+    except Exception:
+        # A patch saved with a syntax error must not end the lab: keep serving (and watching files) until it is fixed.
+        if not is_running_from_reloader():
+            raise
+        traceback.print_exc()
+        app = create_broken_app(traceback.format_exc())
     if args.no_reload or is_running_from_reloader():  # with the reloader, only the serving child announces itself
         mode = "reference fixes" if args.fixed else "vulnerable"
         print(f" * BreachLab ({mode}): open http://{'[::1]' if host == '::1' else host}:{args.port}/", flush=True)

@@ -5,7 +5,7 @@ under breachlab/vulnerable/ (reached here through `impl()`), so it can be swappe
 for the learner's patch or the reference fix. What IS in this file are the lab's
 own safety rails, which are not part of any challenge:
 
-  * loopback_only        refuses non-local clients and unknown Host headers
+  * is_local_request     refuses non-local clients and unknown Host headers
   * fetch_sandboxed      the SSRF "network" is the app itself, called in-process
   * download_export      traversal can leave exports/ but never the lab's data folder
 """
@@ -109,6 +109,36 @@ def is_external(target: str, own_origin: str) -> bool:
     return bool(parts.scheme)
 
 
+def is_local_request() -> bool:
+    """Safety rail: True when the request comes from this machine and is addressed to it.
+
+    The Host check also stops DNS rebinding, where a hostile website points its own
+    domain at 127.0.0.1 to read this deliberately vulnerable app from your browser.
+    """
+    try:
+        remote_ok = ipaddress.ip_address(request.remote_addr or "").is_loopback
+    except ValueError:
+        remote_ok = False
+    return remote_ok and HOST_HEADER.fullmatch(request.host) is not None
+
+
+def create_broken_app(details: str):
+    """Stand-in served while patched code fails to import, so the reloader lives on to see the next save."""
+    app = Flask(__name__)
+
+    @app.before_request
+    def explain():
+        if not is_local_request():
+            abort(403)
+        text = (
+            "BreachLab could not load your code. Fix the error below and save the file:\n"
+            f"the server restarts by itself.\n\n{details}"
+        )
+        return Response(text, 500, mimetype="text/plain")
+
+    return app
+
+
 def money(value):
     """Format cents as dollars; anything else (say, a UNION-injected string) is shown as is."""
     return f"${value / 100:,.2f}" if isinstance(value, int) else str(value)
@@ -158,16 +188,8 @@ def create_app(data_dir=None, impl=None):
 
     @app.before_request
     def loopback_only():
-        """Safety rail: serve this machine only, whatever address the server was bound to.
-
-        The Host check also stops DNS rebinding, where a hostile website points its own
-        domain at 127.0.0.1 to read this deliberately vulnerable app from your browser.
-        """
-        try:
-            remote_ok = ipaddress.ip_address(request.remote_addr or "").is_loopback
-        except ValueError:
-            remote_ok = False
-        if not remote_ok or not HOST_HEADER.fullmatch(request.host):
+        """Safety rail: serve this machine only, whatever address the server was bound to."""
+        if not is_local_request():
             abort(403, "BreachLab only answers requests from and for this machine.")
         # The lab's own buttons (reset, verify) must not be forgeable from other origins.
         if request.method == "POST" and request.path.startswith("/lab"):
@@ -211,7 +233,9 @@ def create_app(data_dir=None, impl=None):
     def http_error(error):
         if request.path.startswith(("/api/", "/internal/")):
             return jsonify(error=error.description), error.code
-        return render_template("error.html", error=error), error.code
+        # An unhandled exception is most likely the learner's patch: name it instead of "server overloaded".
+        cause = getattr(error, "original_exception", None)
+        return render_template("error.html", error=error, cause=cause), error.code
 
     # ---- Quillbook: sign in ---------------------------------------------------------
 

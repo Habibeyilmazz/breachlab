@@ -1,12 +1,20 @@
 """The lab around the app: progress, hints, fix checking, reset, and the safety rails."""
 
+import http.client
+import shutil
 import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from types import SimpleNamespace
 
 import pytest
 
 from breachlab import store
 from breachlab.__main__ import loopback_address, main
-from breachlab.app import SANDBOX_NOTICE, is_external, is_loopback_host
+from breachlab.app import PACKAGE_DIR, SANDBOX_NOTICE, create_broken_app, is_external, is_loopback_host
 from breachlab.challenges import CHALLENGES
 
 
@@ -101,6 +109,61 @@ def test_data_survives_a_restart(tmp_path):
     again = create_app(tmp_path)
     assert again.config["SECRET_KEY"] == secret
     assert "1 of 10 flags" in text(again.test_client().get("/lab"))
+
+
+# ---- a learner's broken patch must not take the lab down ----------------------------------
+
+
+def test_an_exception_in_patched_code_is_named_on_the_page_and_in_the_fix_check(make_client):
+    client = make_client()
+    # A namespace of its own: load_impl() hands out the real modules, which other tests share.
+    client.application.config["IMPL"].idor = SimpleNamespace(load_invoice=lambda *args: undefined_name)  # noqa: F821
+    page = text(client.get("/invoices/1001"))
+    assert "NameError: name &#39;undefined_name&#39; is not defined" in page and "overloaded" not in page
+    report = text(client.post("/lab/c/idor/verify"))
+    assert "Not fixed yet." in report and "your code raised NameError" in report
+
+
+def test_the_stand_in_for_code_that_does_not_import_keeps_the_host_check():
+    client = create_broken_app("SyntaxError: '(' was never closed").test_client()
+    response = client.get("/lab")
+    assert response.status_code == 500 and "SyntaxError" in text(response) and "save the file" in text(response)
+    assert client.get("/lab", headers={"Host": "evil.example"}).status_code == 403
+    assert "SyntaxError" not in text(client.get("/lab", environ_base={"REMOTE_ADDR": "192.168.1.50"}))
+
+
+def test_saving_a_syntax_error_does_not_kill_the_server(tmp_path):
+    """The real thing: a server with the reloader, a patch that does not compile, then the corrected patch."""
+    port = 4169
+    shutil.copytree(PACKAGE_DIR, tmp_path / "breachlab", ignore=shutil.ignore_patterns("__pycache__"))
+    patched = tmp_path / "breachlab" / "vulnerable" / "idor.py"
+    good = patched.read_text()
+
+    def wait_for(status, needle):
+        for _attempt in range(100):
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/lab", timeout=5) as response:
+                    seen = response.status, response.read().decode()
+            except urllib.error.HTTPError as error:
+                seen = error.code, error.read().decode()
+            except (OSError, http.client.HTTPException) as error:  # not listening yet, or cut off by a restart
+                seen = None, str(error)
+            if seen[0] == status and needle in seen[1]:
+                return
+            assert server.poll() is None, "the server exited"
+            time.sleep(0.2)
+        raise AssertionError(f"still waiting for {status} with {needle!r}; last saw {seen}")
+
+    server = subprocess.Popen([sys.executable, "-m", "breachlab", "--port", str(port)], cwd=tmp_path)
+    try:
+        wait_for(200, "Break it, then fix it.")
+        patched.write_text(good + "\ndef oops(:\n")
+        wait_for(500, "SyntaxError")
+        patched.write_text(good)
+        wait_for(200, "Break it, then fix it.")
+    finally:
+        server.terminate()  # the reloader parent takes its serving child down with it
+        server.wait(timeout=10)
 
 
 # ---- the app behaves like an app ------------------------------------------------------
