@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security (security pass, round 11)
+
+- `FLASK_DEBUG=1` in the learner's shell turned on Werkzeug's debugger: `/console` answered with a
+  Python console (PIN-protected) from middleware that runs before the loopback Host and cross-site
+  checks. The server now calls `app.run(..., debug=False)`, which wins over the environment. Test:
+  `test_flask_debug_in_the_environment_does_not_turn_on_the_werkzeug_debugger` (fails without the change).
+- README safety rails: a "No debugger" bullet, and an honest note that any page on another localhost
+  port is same-site, so other local dev servers could drive the holes too.
+- Checked and found clean: `pip-audit` (Flask 3.1.3, Werkzeug 3.1.9, Jinja2 3.1.6, all installed
+  packages) and `npm audit` in `e2e/` report nothing; every pinned action SHA matches its tag
+  (`gh api`); workflow token is `contents: read` with `persist-credentials: false`; no secrets or
+  personal paths in git history. Reference fixes reread; nothing to change.
+- `node e2e/solve.cjs` rerun in both modes on port 4162: 11 of 11 flags captured vulnerable, all 11
+  attacks blocked and fixes verified with `--fixed`.
+- Not changed: the 404 page still uses Flask's stock wording; Windows, Safari and Lighthouse remain unchecked.
+
 ### Changed (design pass, round 10)
 
 - Looked at every lab and Quillbook page in Chromium at 1280 px and 390 px, light and dark. No horizontal

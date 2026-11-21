@@ -152,6 +152,12 @@ These are part of the lab, not part of any challenge:
 - **Mallory's site gets the same rails.** It binds to the lab's loopback address, answers only local
   clients with a loopback `Host`, refuses cross-site requests, and serves only the one page you saved
   (`.breachlab/attacker.html`, at most 20,000 characters). "Reset data and progress" deletes it.
+- **No debugger.** The server always runs with Flask's debug mode off, even when `FLASK_DEBUG=1` is set
+  in your shell. Werkzeug's debugger console runs Python and would sit in front of every rail above.
+
+Same-site means any page served from `127.0.0.1` or `localhost` on another port counts, not only
+Mallory's. Another local dev server you run alongside BreachLab could drive its holes, so do not browse
+untrusted local pages while the lab is up.
 
 The rails limit what a mistake can cost; they do not make the app safe. Stop the server when you are not practising.
 
