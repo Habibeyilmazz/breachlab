@@ -12,7 +12,7 @@ import pytest
 
 from breachlab.__main__ import main
 from breachlab.app import PACKAGE_DIR
-from breachlab.attacker import MAX_PAGE, STARTER_PAGE, create_attacker_app
+from breachlab.attacker import MAX_PAGE, STARTER_PAGE, create_attacker_app, page_path
 
 ATTACK = (
     '<form method="post" action="http://127.0.0.1:4160/account"><input name="display_name" value="Alice">'
@@ -118,3 +118,18 @@ def test_the_server_runs_mallorys_site_on_the_next_port_or_carries_on_without_it
         output = server.communicate(timeout=10)[0]
         blocker.close()
     assert ("could not start" in output) is busy
+
+
+def test_a_page_with_non_ascii_text_survives_the_round_trip(lab, tmp_path):
+    page = "<p>Grüße 😈 日本語</p>"
+    assert lab.post("/lab/attacker", data={"page": page}).status_code == 302
+    assert page_path(tmp_path).read_bytes() == page.encode("utf-8")
+    assert create_attacker_app(tmp_path).test_client().get("/").get_data().decode("utf-8") == page
+
+
+@pytest.mark.parametrize("flag", ["--port", "--attacker-port"])
+@pytest.mark.parametrize("value", ["0", "-1", "65536", "70000"])
+def test_ports_outside_the_valid_range_are_a_usage_error_not_a_traceback(flag, value, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main([flag, value])
+    assert exit_info.value.code == 2 and "between 1 and 65535" in capsys.readouterr().err

@@ -36,14 +36,21 @@ def start_attacker(host, port):
     return port
 
 
+def port_number(text):
+    port = int(text)
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("must be between 1 and 65535")
+    return port
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python -m breachlab", description=__doc__)
     parser.add_argument("--host", default="127.0.0.1", help="loopback address to bind (anything else is refused)")
-    parser.add_argument("--port", type=int, default=4160)
+    parser.add_argument("--port", type=port_number, default=4160)
     parser.add_argument("--fixed", action="store_true", help="serve the reference fixes instead of the vulnerable code")
     parser.add_argument(
         "--attacker-port",
-        type=int,
+        type=port_number,
         help="port for Mallory's site, the CSRF challenge's attacker page (default: --port + 1)",
     )
     parser.add_argument("--no-reload", action="store_true", help="do not restart when a source file changes")

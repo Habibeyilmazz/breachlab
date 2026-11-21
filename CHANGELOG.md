@@ -34,6 +34,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Reliability pass (found by fuzzing odd input and hammering a running server with 24 parallel
+  learners):
+  - `/invoices/99999999999999999999` was a 500 (`OverflowError` from SQLite's 64-bit integers); it is a 404.
+  - Pressing Reset twice, or resetting while another page loads, could 500 with "no such table" or
+    "table already exists", because the reset dropped and recreated tables in place. It now builds the
+    new database beside the old one, swaps it in with `os.replace` and holds a lock, so a request sees
+    all-old or all-new data. A request that writes through a connection opened before the swap can
+    still fail once ("readonly database"); reloading fixes it.
+  - `--port 70000`, `-1` and `0` (and the same for `--attacker-port`) ended in a traceback; they are
+    now a usage error ("must be between 1 and 65535").
+  - Files the lab reads or writes (Mallory's page, exports, wordlist, solution sources) are now
+    always UTF-8 instead of the platform default, which matters on Windows. Not run on Windows; the
+    UTF-8 round-trip test guards it on any platform.
 - Keyboard focus rings were amber on light paper (about 2:1 contrast). They are ink on light
   backgrounds and amber on dark ones.
 - The progress squares in the lab bar were 18px with 5px gaps, under the 24px target size. They are

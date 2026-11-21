@@ -27,7 +27,7 @@ def page_path(data_dir) -> Path:
 
 def read_page(data_dir) -> str:
     try:
-        return page_path(data_dir).read_text()
+        return page_path(data_dir).read_text(encoding="utf-8")
     except FileNotFoundError:
         return STARTER_PAGE
 

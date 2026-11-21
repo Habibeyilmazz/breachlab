@@ -1,8 +1,10 @@
 """Throwaway SQLite storage: the fake app's data (app.db) and the learner's progress (lab.db)."""
 
+import os
 import secrets
 import shutil
 import sqlite3
+import threading
 import time
 from functools import cache
 from pathlib import Path
@@ -85,16 +87,28 @@ def connect(path):
     return conn
 
 
+_seeding = threading.Lock()  # the web server is threaded: two resets at once must not interleave
+
+
 def seed_app(data_dir: Path):
     """(Re)create the fake app's tables and files with fresh data."""
-    conn = connect(data_dir / "app.db")
-    with conn:
-        conn.executescript(APP_SCHEMA)
-        conn.executemany("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)", _users())
-        conn.executemany("INSERT INTO invoices VALUES (?, ?, ?, ?, ?, ?)", INVOICES)
-        conn.executemany("INSERT INTO notes (author_id, body) VALUES (?, ?)", NOTES)
-    conn.close()
+    with _seeding:
+        # Build the new database beside the old one and swap it in, so a request running during
+        # a reset sees the whole old data or the whole new data, never a half-dropped schema.
+        fresh = data_dir / "app.db.new"
+        fresh.unlink(missing_ok=True)
+        conn = connect(fresh)
+        with conn:
+            conn.executescript(APP_SCHEMA)
+            conn.executemany("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)", _users())
+            conn.executemany("INSERT INTO invoices VALUES (?, ?, ?, ?, ?, ?)", INVOICES)
+            conn.executemany("INSERT INTO notes (author_id, body) VALUES (?, ?)", NOTES)
+        conn.close()
+        os.replace(fresh, data_dir / "app.db")
+        _seed_files(data_dir)
 
+
+def _seed_files(data_dir: Path):
     files = data_dir / "files"
     shutil.rmtree(files, ignore_errors=True)
     (files / "exports").mkdir(parents=True)
@@ -102,7 +116,7 @@ def seed_app(data_dir: Path):
     for number, owner, customer, cents, status, memo in INVOICES:
         if owner == 1:
             text = f"Invoice {number}\nCustomer: {customer}\nAmount: ${cents / 100:,.2f}\nStatus: {status}\n{memo}\n"
-            (files / "exports" / f"invoice-{number}.txt").write_text(text)
+            (files / "exports" / f"invoice-{number}.txt").write_text(text, encoding="utf-8")
     (files / "private" / "payroll-2026.txt").write_text(
         f"Payroll 2026 (private)\nCarol Whitfield  9,900.00\nBob Ferreira     6,150.00\n{FLAGS['path_traversal']}\n"
     )

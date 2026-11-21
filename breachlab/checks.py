@@ -274,7 +274,7 @@ def check_weak_jwt(c):
             attack = f'an unsigned token with "alg": "{alg}" was accepted as admin'
             break
     if attack is None:
-        for word in WORDLIST.read_text().split():
+        for word in WORDLIST.read_text(encoding="utf-8").split():
             if _b64(hmac.new(word.encode(), signing_input.encode(), hashlib.sha256).digest()) == signature:
                 if admin_report(_forge(word.encode(), "HS256", admin)):
                     attack = f"the signing secret is the dictionary word {word!r}, so an admin token can be forged"

@@ -302,6 +302,8 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
     @app.get("/invoices/<int:invoice_id>")
     @login_required
     def invoice(invoice_id):
+        if invoice_id >= 2**63:  # SQLite integers are 64-bit; a bigger one raises OverflowError
+            abort(404, "No such invoice.")
         row = impl_().idor.load_invoice(db(), g.user["id"], invoice_id)
         if row is None:
             abort(404, "No such invoice.")
@@ -338,7 +340,7 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
             abort(404, "No such export.")
         if not real.is_relative_to(exports_dir):  # only a file that is really handed over counts
             award("path_traversal")
-        return Response(real.read_text(errors="replace"), mimetype="text/plain")
+        return Response(real.read_text(encoding="utf-8", errors="replace"), mimetype="text/plain")
 
     def fetch_sandboxed(url):
         """Safety rail: 'fetch' a URL without ever opening a socket.
@@ -507,7 +509,7 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
             number=position + 1,
             following=CHALLENGES[position + 1] if position + 1 < len(CHALLENGES) else None,
             state=store.progress(lab()).get(challenge_id),
-            solution=(PACKAGE_DIR / "solutions" / f"{challenge_id}.py").read_text(),
+            solution=(PACKAGE_DIR / "solutions" / f"{challenge_id}.py").read_text(encoding="utf-8"),
             report=report,
             mallory=mallory,
         )
@@ -534,7 +536,7 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
         page = request.form.get("page", "")
         if len(page) > attacker.MAX_PAGE:
             abort(413, f"Mallory's page can be at most {attacker.MAX_PAGE:,} characters.")
-        attacker.page_path(data_dir).write_text(page)
+        attacker.page_path(data_dir).write_text(page, encoding="utf-8")
         return redirect(url_for("lab_challenge", challenge_id="csrf", saved=1) + "#mallory")
 
     @app.post("/lab/reset")

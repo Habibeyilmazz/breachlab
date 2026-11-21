@@ -212,6 +212,11 @@ def test_an_overlong_export_name_is_a_404(make_client):
     assert make_client().get("/exports/download", query_string={"file": "x" * 5000}).status_code == 404
 
 
+@pytest.mark.parametrize("package", ["vulnerable", "solutions"])
+def test_an_invoice_number_beyond_sqlite_integers_is_a_404(make_client, package):
+    assert make_client(package).get("/invoices/99999999999999999999").status_code == 404
+
+
 @pytest.mark.parametrize("body", [[1], "x", 7, None, {"path": {"a": 1}}, {"path": ["/notes"]}])
 def test_xss_beacon_ignores_malformed_reports(body, make_client, captured):
     assert make_client().post("/lab/xss", json=body).get_json() == {"captured": None}
@@ -349,3 +354,37 @@ def test_is_external(target, expected):
 def test_is_external_knows_default_ports():
     assert is_external("http://localhost:80/x", "http://localhost") is False
     assert is_external("https://localhost/x", "http://localhost") is True
+
+
+def test_resetting_while_the_lab_is_in_use_never_breaks_a_request(tmp_path):
+    import threading
+
+    store.init(tmp_path)
+    errors, stop = [], threading.Event()
+
+    def reset():
+        try:
+            for _ in range(15):
+                store.seed_app(tmp_path)
+        except Exception as exc:  # noqa: BLE001 - any failure is the bug
+            errors.append(exc)
+
+    def read():
+        while not stop.is_set():
+            try:
+                conn = store.connect(tmp_path / "app.db")
+                assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0
+                conn.close()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+    readers = [threading.Thread(target=read) for _ in range(3)]
+    resetters = [threading.Thread(target=reset) for _ in range(4)]
+    for t in readers + resetters:
+        t.start()
+    for t in resetters:
+        t.join()
+    stop.set()
+    for t in readers:
+        t.join()
+    assert errors == []
