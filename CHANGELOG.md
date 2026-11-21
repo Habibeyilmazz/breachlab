@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed (perf/a11y pass, round 16)
+
+- Measured first. Lighthouse 12.6.1 (desktop Chromium, `/lab`, `/login`, `/lab/c/sqli`): performance,
+  accessibility and best-practices all 1.0; SEO was 0.91 because of a missing meta description, now added
+  to `base.html` (SEO 1.0 on all three pages). axe-core 4.10.2 over every page (all 12 challenge pages,
+  invoices, notes, account, help, import, mail check) signed in, light and dark, 1280 px and 375 px wide:
+  no violations, no horizontal overflow.
+- Weight and speed on localhost: `/lab` 9.5 KB of HTML, `style.css` 12.9 KB, `lab.js` 2.2 KB, no images
+  beyond a 438-byte SVG; importing the app takes 0.1 s; pages answer in 1 to 12 ms. Nothing worth
+  optimising; no compression or caching added (localhost only). `lab.js` stays a synchronous script in
+  `<head>` on purpose: it must hook `alert()` before a learner's XSS payload runs.
+- Unused code: none found (ruff clean, two runtime-free dependencies besides Flask).
+- Still unchecked: Windows, Safari. Port 4160 is held by a foreign process (PID 68470), not ours.
+
 ### Added (feature round 15)
 
 - Challenge 12, command injection. Quillbook's help centre has a new "Check your mail server" page
