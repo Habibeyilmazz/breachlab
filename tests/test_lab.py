@@ -206,10 +206,11 @@ def test_saving_a_syntax_error_does_not_kill_the_server(tmp_path):
     def wait_for(status, needle):
         for _attempt in range(100):
             try:
-                with urllib.request.urlopen(f"http://127.0.0.1:{port}/lab", timeout=5) as response:
-                    seen = response.status, response.read().decode()
-            except urllib.error.HTTPError as error:
-                seen = error.code, error.read().decode()
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/lab", timeout=5) as response:
+                        seen = response.status, response.read().decode()
+                except urllib.error.HTTPError as error:
+                    seen = error.code, error.read().decode()
             except (OSError, http.client.HTTPException) as error:  # not listening yet, or cut off by a restart
                 seen = None, str(error)
             if seen[0] == status and needle in seen[1]:
@@ -263,7 +264,11 @@ def test_starting_over_on_a_real_server_answers_then_reloads_the_original_code(t
         assert "The attack is blocked" in post("/lab/c/idor/verify")
         assert "The original code is back in" in post("/lab/c/idor/restart")  # answered before the reload
         for _attempt in range(50):  # git puts the file back, then the reloader restarts the server on it
-            if module.read_text(encoding="utf-8") == original and "Not fixed yet." in post("/lab/c/idor/verify"):
+            try:
+                restored = module.read_text(encoding="utf-8") == original
+            except FileNotFoundError:  # git is between unlinking and writing the file
+                restored = False
+            if restored and "Not fixed yet." in post("/lab/c/idor/verify"):
                 break
             time.sleep(0.2)
         else:
