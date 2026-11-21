@@ -1,0 +1,16 @@
+{% extends "app.html" %}
+{% block heading %}Sign in{% endblock %}
+{% block content %}
+<div class="qb-narrow">
+  <h1>Sign in to Quillbook</h1>
+  {% if error %}<p class="qb-alert" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" class="qb-form">
+    <label for="username">Username</label>
+    <input id="username" name="username" autocomplete="username" required autofocus>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button class="qb-btn">Sign in</button>
+  </form>
+  <p class="qb-muted">Your lab account: username <code>{{ learner[0] }}</code>, password <code>{{ learner[1] }}</code></p>
+</div>
+{% endblock %}

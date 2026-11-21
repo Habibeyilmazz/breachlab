@@ -1,0 +1,31 @@
+{% extends "app.html" %}
+{% block heading %}Invoices{% endblock %}
+{% block content %}
+<div class="qb-head">
+  <h1>Invoices</h1>
+  <a class="qb-btn qb-btn-quiet" href="{{ url_for('import_invoice') }}">Import from URL</a>
+</div>
+<form method="get" class="qb-search" role="search">
+  <label for="q" class="visually-hidden">Search your invoices by customer</label>
+  <input id="q" name="q" value="{{ query }}" placeholder="Search by customer">
+  <button class="qb-btn">Search</button>
+</form>
+{% if error %}<p class="qb-alert" role="alert">{{ error }}</p>{% endif %}
+{% if rows %}
+<table class="qb-table">
+  <thead><tr><th scope="col">Number</th><th scope="col">Customer</th><th scope="col" class="num">Amount</th><th scope="col">Status</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="/invoices/{{ row[0] }}">{{ row[0] }}</a></td>
+      <td>{{ row[1] }}</td>
+      <td class="num">{{ row[2]|money }}</td>
+      <td><span class="qb-status">{{ row[3] }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% elif not error %}
+<p class="qb-muted">No invoices match{% if query %} “{{ query }}”{% endif %}. <a href="{{ url_for('invoices') }}">Show all your invoices</a></p>
+{% endif %}
+{% endblock %}

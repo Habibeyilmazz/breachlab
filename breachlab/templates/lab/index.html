@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Challenges · BreachLab{% endblock %}
+{% block page %}
+<main id="main" class="lab">
+  <h1 class="lab-title">Break it, then fix it.</h1>
+  <p class="lab-lede">Quillbook is a small notes-and-invoices app with ten real security holes. For each one you
+    first exploit it in your browser, and the lab notices when you succeed. Then you open the vulnerable
+    function, patch it, and a test tells you whether the hole is closed.</p>
+  <p class="lab-warning"><strong>Keep this on your own machine.</strong> BreachLab is vulnerable on purpose. It only
+    answers on 127.0.0.1 and must never be deployed or exposed to a network.</p>
+  {% if request.args.get('reset') %}<p class="lab-note" role="status">The lab was reset.</p>{% endif %}
+
+  <ol class="caselist">
+    {% for c in lab.challenges %}
+    {% set row = lab.progress.get(c.id) %}
+    <li>
+      <a href="{{ url_for('lab_challenge', challenge_id=c.id) }}">
+        <span class="case-title">{{ c.title }}</span>
+        <span class="case-weakness">{{ c.weakness }}</span>
+      </a>
+      <span class="case-state">
+        <span class="stamp {{ 'stamp-captured' if row and row.solved_at else 'stamp-open' }}">{{ 'Flag captured' if row and row.solved_at else 'Not broken yet' }}</span>
+        <span class="stamp {{ 'stamp-fixed' if row and row.fixed_at else 'stamp-open' }}">{{ 'Fixed' if row and row.fixed_at else 'Not fixed yet' }}</span>
+      </span>
+    </li>
+    {% endfor %}
+  </ol>
+
+  <section class="lab-columns">
+    <div>
+      <h2>Getting in</h2>
+      <p>You are Alice, a new hire with an ordinary account. <a href="{{ url_for('login') }}">Sign in to Quillbook</a>
+        as <code>alice</code> with the password <code>alice-demo</code>. Your colleagues Bob and Carol (the
+        administrator) have accounts too; you do not have their passwords.</p>
+    </div>
+    <div>
+      <h2>Starting over</h2>
+      <p>Broke the app with one of your own payloads? Restore the sample data. Your flags are kept unless you
+        ask to clear them as well.</p>
+      <form method="post" action="{{ url_for('lab_reset') }}" class="lab-actions">
+        <button class="lab-btn" name="what" value="data">Reset app data</button>
+        <button class="lab-btn lab-btn-danger" name="what" value="everything" data-confirm="Clear all captured flags and fix results too?">Reset data and progress</button>
+      </form>
+    </div>
+  </section>
+</main>
+{% endblock %}

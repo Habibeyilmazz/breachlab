@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{% block heading %}{% endblock %} · Quillbook{% endblock %}
+{% block page %}
+<div class="qb">
+  <header class="qb-top">
+    <a class="qb-logo" href="{{ url_for('home') }}">Quillbook</a>
+    {% if g.user %}
+    <nav aria-label="Quillbook">
+      <a href="{{ url_for('invoices') }}">Invoices</a>
+      <a href="{{ url_for('notes') }}">Team board</a>
+      <a href="{{ url_for('help_centre') }}">Help</a>
+      <a href="{{ url_for('account') }}">Account</a>
+      {% if g.user.role == 'admin' %}<a href="{{ url_for('admin') }}">Admin</a>{% endif %}
+    </nav>
+    <form method="post" action="{{ url_for('logout') }}" class="qb-user">
+      <span>{{ g.user.display_name }}</span>
+      <button class="qb-btn qb-btn-quiet">Sign out</button>
+    </form>
+    {% else %}
+    <nav aria-label="Quillbook">
+      <a href="{{ url_for('help_centre') }}">Help</a>
+      <a href="{{ url_for('login') }}">Sign in</a>
+    </nav>
+    {% endif %}
+  </header>
+  <main id="main" class="qb-main">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

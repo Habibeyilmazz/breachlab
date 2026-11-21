@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BreachLab">
+  <rect width="64" height="64" rx="12" fill="#161a33"/>
+  <path d="M32 10 50 17v14c0 11-7.4 19.500-18 23-10.600-3.500-18-12-18-23V17z" fill="none" stroke="#f2f3f8" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M35 12 27 28h10l-8 24" fill="none" stroke="#f0a30a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

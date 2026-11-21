@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}BreachLab{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', filename='logo.svg') }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='lab.js') }}"></script>
+</head>
+<body>
+{% set lab = lab_status() %}
+<a class="skip" href="#main">Skip to content</a>
+<header class="labbar">
+  <a class="labbar-brand" href="{{ url_for('lab_index') }}">
+    <img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="20" height="20">BreachLab
+  </a>
+  <ol class="seals" aria-label="Challenges">
+    {% for c in lab.challenges %}
+    {% set row = lab.progress.get(c.id) %}
+    {% set state = 'fixed' if row and row.fixed_at else ('captured' if row and row.solved_at else 'open') %}
+    <li><a class="seal seal-{{ state }}" href="{{ url_for('lab_challenge', challenge_id=c.id) }}" title="{{ loop.index }}. {{ c.title }}: {{ {'open': 'not broken yet', 'captured': 'flag captured', 'fixed': 'fixed'}[state] }}"><span class="visually-hidden">{{ loop.index }}. {{ c.title }}: {{ {'open': 'not broken yet', 'captured': 'flag captured', 'fixed': 'fixed'}[state] }}</span></a></li>
+    {% endfor %}
+  </ol>
+  <span class="labbar-count">{{ lab.solved }} of {{ lab.challenges|length }} flags</span>
+  <a class="labbar-link" href="{{ url_for('lab_index') }}">Challenges</a>
+</header>
+<div id="lab-announce" role="status">
+  {% for c in lab.fresh %}
+  <p class="flagbanner">Flag captured: <strong>{{ c.title }}</strong> <code>{{ c.flag }}</code>
+    <a href="{{ url_for('lab_challenge', challenge_id=c.id) }}">Now fix it</a></p>
+  {% endfor %}
+</div>
+{% block page %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,16 @@
+{% extends "app.html" %}
+{% block heading %}Invoice {{ invoice.id }}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('invoices') }}">All invoices</a></p>
+<h1>Invoice {{ invoice.id }}</h1>
+<dl class="qb-facts">
+  <dt>Customer</dt><dd>{{ invoice.customer }}</dd>
+  <dt>Amount</dt><dd>{{ invoice.amount_cents|money }}</dd>
+  <dt>Status</dt><dd><span class="qb-status">{{ invoice.status }}</span></dd>
+  <dt>Owner</dt><dd>{{ owner.display_name if owner else 'unknown' }}</dd>
+  <dt>Memo</dt><dd>{{ invoice.memo }}</dd>
+</dl>
+{% if mine %}
+<p><a class="qb-btn qb-btn-quiet" href="{{ url_for('download_export', file='invoice-%d.txt' % invoice.id) }}">Download text export</a></p>
+{% endif %}
+{% endblock %}

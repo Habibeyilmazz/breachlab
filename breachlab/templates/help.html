@@ -1,0 +1,17 @@
+{% extends "app.html" %}
+{% block heading %}Help{% endblock %}
+{% block content %}
+<h1>Help centre</h1>
+<form method="get" class="qb-search" role="search">
+  <label for="q" class="visually-hidden">Search the help centre</label>
+  <input id="q" name="q" value="{{ query }}" placeholder="Search help articles">
+  <button class="qb-btn">Search</button>
+</form>
+{% if heading %}<p class="qb-results">{{ heading }}</p>{% endif %}
+<dl class="qb-faq">
+  {% for question, answer in matches %}
+  <dt>{{ question }}</dt><dd>{{ answer }}</dd>
+  {% endfor %}
+</dl>
+{% if query and not matches %}<p class="qb-muted">Try a shorter search, or <a href="{{ url_for('help_centre') }}">browse all articles</a>.</p>{% endif %}
+{% endblock %}

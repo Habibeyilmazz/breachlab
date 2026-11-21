@@ -1,0 +1,9 @@
+{% extends "app.html" %}
+{% block heading %}{{ error.code }}{% endblock %}
+{% block content %}
+<div class="qb-narrow">
+  <h1>{{ error.code }} {{ error.name }}</h1>
+  <p>{{ error.description }}</p>
+  <p><a href="{{ url_for('home') }}">Back to Quillbook</a></p>
+</div>
+{% endblock %}

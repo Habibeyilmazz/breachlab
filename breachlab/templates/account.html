@@ -1,0 +1,24 @@
+{% extends "app.html" %}
+{% block heading %}Account{% endblock %}
+{% block content %}
+<h1>Account</h1>
+{% if saved %}<p class="qb-ok" role="status">Changes saved.</p>{% endif %}
+{% if error %}<p class="qb-alert" role="alert">{{ error }}</p>{% endif %}
+<dl class="qb-facts">
+  <dt>Username</dt><dd>{{ g.user.username }}</dd>
+  <dt>Role</dt><dd>{{ g.user.role }}</dd>
+  <dt>Account credit</dt><dd>{{ g.user.credit_cents|money }}</dd>
+</dl>
+<h2>Profile</h2>
+<form method="post" class="qb-form" id="profile">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label for="display_name">Display name</label>
+  <input id="display_name" name="display_name" value="{{ g.user.display_name }}" maxlength="200" required>
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" value="{{ g.user.email }}" maxlength="200" required>
+  <button class="qb-btn">Save changes</button>
+</form>
+<h2>API access</h2>
+<p class="qb-muted">Send this token as <code>Authorization: Bearer …</code> to <code>/api/me</code>.</p>
+<pre class="qb-preview" id="api-token">{{ token }}</pre>
+{% endblock %}

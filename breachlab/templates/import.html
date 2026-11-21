@@ -1,0 +1,17 @@
+{% extends "app.html" %}
+{% block heading %}Import from URL{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('invoices') }}">All invoices</a></p>
+<h1>Import an invoice from a URL</h1>
+<p class="qb-muted">Paste the link your supplier sent you. Quillbook downloads it and shows a preview before anything is saved.</p>
+{% if error %}<p class="qb-alert" role="alert">{{ error }}</p>{% endif %}
+<form method="post" class="qb-search">
+  <label for="url" class="visually-hidden">Supplier invoice URL</label>
+  <input id="url" name="url" type="text" inputmode="url" value="{{ url }}" placeholder="https://supplier.example/invoices/4471.json" required>
+  <button class="qb-btn">Fetch preview</button>
+</form>
+{% if preview is not none %}
+<h2>Preview</h2>
+<pre class="qb-preview">{{ preview }}</pre>
+{% endif %}
+{% endblock %}

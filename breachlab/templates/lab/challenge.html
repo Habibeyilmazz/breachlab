@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ challenge.title }} · BreachLab{% endblock %}
+{% block page %}
+{% set captured = state and state.solved_at %}
+{% set test_command = 'pytest fix_tests -k ' ~ challenge.id %}
+<main id="main" class="lab">
+  <p class="lab-crumb"><a href="{{ url_for('lab_index') }}">All challenges</a></p>
+  <h1 class="lab-title">{{ challenge.title }}</h1>
+  <p class="lab-lede">Challenge {{ number }} of 10. {{ challenge.weakness }}.</p>
+
+  <section class="stage" aria-labelledby="stage1">
+    <h2 id="stage1"><span class="stage-step">1</span> Break it
+      <span class="stamp {{ 'stamp-captured' if captured else 'stamp-open' }}">{{ 'Flag captured' if captured else 'Not broken yet' }}</span></h2>
+    <div class="story">{{ challenge.story|safe }}</div>
+    <p class="goal"><strong>Goal.</strong> {{ challenge.goal|safe }}</p>
+    {% if captured %}<p class="lab-note">Your flag: <code>{{ challenge.flag }}</code></p>{% endif %}
+    <p><a class="lab-btn" href="{{ challenge.start }}">Open {{ challenge.start }} in Quillbook</a></p>
+    <div class="hints">
+      {% for hint in challenge.hints %}
+      <details>
+        <summary>Hint {{ loop.index }}{{ ' (the answer)' if loop.last }}</summary>
+        <p>{{ hint|replace('ORIGIN', origin)|safe }}</p>
+      </details>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="stage" aria-labelledby="stage2">
+    <h2 id="stage2"><span class="stage-step">2</span> Fix it
+      <span class="stamp {{ 'stamp-fixed' if state and state.fixed_at else 'stamp-open' }}">{{ 'Fixed' if state and state.fixed_at else 'Not fixed yet' }}</span></h2>
+    {% if not captured and not report %}
+    <p class="lab-muted">Capture the flag first. Fixing a hole is easier once you have used it.</p>
+    {% endif %}
+    <p>The hole is in one function: <code>{{ challenge.function }}</code> in
+      <code>breachlab/vulnerable/{{ challenge.id }}.py</code>. Change it so the attack fails and the feature keeps
+      working. The server restarts by itself when you save.</p>
+    <p>Then run the provided test from the project folder, or use the button, which runs the same check:</p>
+    <pre class="cmd">{{ test_command }}</pre>
+    <form method="post" action="{{ url_for('lab_verify', challenge_id=challenge.id) }}#stage2">
+      <button class="lab-btn">Check my fix</button>
+    </form>
+    {% if report %}
+    <div class="report {{ 'report-ok' if report.ok else 'report-fail' }}" role="status">
+      {% if report.ok %}
+      <p><strong>Fixed.</strong> The attack is blocked and the feature still works.</p>
+      {% else %}
+      <p><strong>Not fixed yet.</strong></p>
+      <ul>
+        {% if report.attack %}<li>The attack still works: {{ report.attack }}.</li>{% endif %}
+        {% if report.broken %}<li>Something legitimate broke: {{ report.broken }}.</li>{% endif %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endif %}
+    <details class="solution">
+      <summary>Show the reference fix and why it works (spoiler)</summary>
+      <p class="lab-muted">From <code>breachlab/solutions/{{ challenge.id }}.py</code>. Run the whole app on the
+        reference fixes with <code>python -m breachlab --fixed</code>.</p>
+      <pre class="code">{{ solution }}</pre>
+    </details>
+  </section>
+
+  {% if following %}
+  <p class="lab-next">Next: <a href="{{ url_for('lab_challenge', challenge_id=following.id) }}">{{ following.title }}</a></p>
+  {% endif %}
+</main>
+{% endblock %}
