@@ -1,0 +1,259 @@
+"""Attack-and-regression checks, one per challenge.
+
+Each check drives a fresh copy of the app like a browser would and answers two questions:
+does the attack still work, and does the legitimate feature still work? A fix is accepted
+only when the answers are "no" and "yes". Used by fix_tests/, by tests/ and by the
+"Check my fix" button.
+"""
+
+import base64
+import hashlib
+import hmac
+import json
+import re
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+from .store import LEARNER
+
+WORDLIST = Path(__file__).resolve().parent / "wordlists" / "jwt-secrets.txt"
+
+
+@dataclass
+class Report:
+    attack: str | None  # how the attack succeeded, or None when it was blocked
+    broken: str | None  # which legitimate behaviour stopped working, or None
+
+    @property
+    def ok(self):
+        return self.attack is None and self.broken is None
+
+
+def run(challenge_id, impl) -> Report:
+    """Check one challenge against the implementation modules in `impl`, on throwaway data."""
+    from .app import create_app
+
+    with tempfile.TemporaryDirectory(prefix="breachlab-check-") as tmp:
+        client = create_app(tmp, impl).test_client()
+        try:
+            _login(client)
+            return Report(*CHECKS[challenge_id](client))
+        except Exception as exc:  # a crash in patched code is a failed check, not a crashed lab
+            return Report(None, f"the check crashed: {exc!r}")
+
+
+def _login(client, next_url=None):
+    username, password = LEARNER
+    query = {"next": next_url} if next_url is not None else None
+    return client.post("/login", query_string=query, data={"username": username, "password": password})
+
+
+def _text(response):
+    return response.get_data(as_text=True)
+
+
+def _csrf_token(client):
+    return re.search(r'name="csrf_token" value="([^"]*)"', _text(client.get("/account"))).group(1)
+
+
+def _save_account(client, **fields):
+    return client.post("/account", data={"csrf_token": _csrf_token(client), **fields})
+
+
+def check_sqli(c):
+    attack = None
+    for payload in ("' OR 1=1--", "' UNION SELECT id, username, 0, password_hash FROM users--"):
+        page = _text(c.get("/invoices", query_string={"q": payload}))
+        if "Harbor Freight" in page or "scrypt:" in page:
+            attack = f"searching for {payload} returned data that is not alice's"
+            break
+    page = _text(c.get("/invoices", query_string={"q": "O'Brien"}))
+    broken = None
+    if "O&#39;Brien &amp; Sons" not in page:
+        broken = "searching for O'Brien should find the O'Brien & Sons invoice"
+    elif "Acme Robotics" in page:
+        broken = "searching for O'Brien should not list other customers"
+    return attack, broken
+
+
+def check_reflected_xss(c):
+    attack = None
+    for payload in ("<script>alert(1)</script>", "<img src=x onerror=alert(1)>"):
+        if payload in _text(c.get("/help", query_string={"q": payload})):
+            attack = f"/help?q={payload} put the markup into the page unescaped"
+            break
+    page = _text(c.get("/help", query_string={"q": "a<b export"}))
+    broken = None if "a&lt;b export" in page else "the heading should show the search term as text (a<b export)"
+    if broken is None and "<strong>" not in _text(c.get("/help", query_string={"q": "export"})):
+        broken = "the search term should still be shown in bold"
+    return attack, broken
+
+
+def check_stored_xss(c):
+    payloads = ('<script>alert("stored")</script>', "<img src=x onerror=alert(1)>")
+    for payload in payloads:
+        c.post("/notes", data={"body": payload})
+    c.post("/notes", data={"body": "Totals: 5 < 6 & 7 > 2\nsecond line"})
+    page = _text(c.get("/notes"))
+    attack = next((f"the note {p} is served as live markup" for p in payloads if p in page), None)
+    broken = None
+    if "Totals: 5 &lt; 6 &amp; 7 &gt; 2" not in page:
+        broken = "a note with < and & in it should be shown as the author typed it"
+    elif not re.search(r"7 &gt; 2\s*<br\s*/?>\s*second line", page):
+        broken = "line breaks in a note should still become <br>"
+    return attack, broken
+
+
+def check_idor(c):
+    theirs = c.get("/invoices/2001")
+    attack = "alice can open Bob's invoice 2001" if theirs.status_code == 200 and "Harbor" in _text(theirs) else None
+    mine = c.get("/invoices/1001")
+    broken = None if mine.status_code == 200 and "Acme Robotics" in _text(mine) else "alice should see her invoice 1001"
+    return attack, broken
+
+
+def check_path_traversal(c):
+    private = Path(c.application.config["DATA_DIR"]) / "files" / "private" / "payroll-2026.txt"
+    attack = None
+    for name in (
+        "../private/payroll-2026.txt",
+        "x/../../private/payroll-2026.txt",
+        str(private),
+        "../../../../etc/hosts",
+    ):
+        body = _text(c.get("/exports/download", query_string={"file": name}))
+        if "Payroll 2026" in body or "Lab sandbox" in body:
+            attack = f"file={name} escaped the exports folder"
+            break
+    mine = c.get("/exports/download", query_string={"file": "invoice-1001.txt"})
+    broken = None if mine.status_code == 200 and "Acme Robotics" in _text(mine) else "invoice-1001.txt should download"
+    return attack, broken
+
+
+def check_open_redirect(c):
+    attack = None
+    for target in (
+        "https://evil.example/",
+        "//evil.example/",
+        "/\\evil.example/",
+        "\\\\evil.example/",
+        "/\t/evil.example/",
+    ):
+        location = _login(c.application.test_client(), target).headers.get("Location", "")
+        if _is_external(location):
+            attack = f"/login?next={target!r} redirects to {location!r}"
+            break
+    location = _login(c.application.test_client(), "/notes?from=login").headers.get("Location")
+    broken = None if location == "/notes?from=login" else "next=/notes?from=login should return the user to that page"
+    return attack, broken
+
+
+def _is_external(location):
+    from .app import is_external
+
+    return is_external(location, "localhost")
+
+
+def check_mass_assignment(c):
+    attack = None
+    _save_account(c, display_name="Alice Moreau", email="alice@quillbook.test", role="admin")
+    if c.get("/admin").status_code == 200:
+        attack = "posting role=admin with the profile form made alice an administrator"
+    _save_account(c, display_name="Alice Moreau", email="alice@quillbook.test", credit_cents="99999900")
+    if attack is None and "$999,999.00" in _text(c.get("/account")):
+        attack = "posting credit_cents with the profile form changed alice's account credit"
+    _save_account(c, display_name="Alice M.", email="alice.m@quillbook.test")
+    page = _text(c.get("/account"))
+    broken = None if "Alice M." in page and "alice.m@quillbook.test" in page else "name and email should still save"
+    return attack, broken
+
+
+def check_csrf(c):
+    attack = None
+    forged = {"display_name": "Alice Moreau", "email": "attacker@evil.test"}
+    for extra in ({}, {"csrf_token": ""}, {"csrf_token": "guess"}):
+        c.post("/account", data={**forged, **extra}, headers={"Origin": "http://127.0.0.1:8001"})
+        if "attacker@evil.test" in _text(c.get("/account")):
+            attack = f"a cross-origin post with {extra or 'no token'} changed alice's email"
+            break
+    _save_account(c, display_name="Alice Moreau", email="alice.new@quillbook.test")
+    broken = None if "alice.new@quillbook.test" in _text(c.get("/account")) else "the real form should still save"
+    return attack, broken
+
+
+def _b64(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def _forge(secret: bytes | None, alg: str, claims: dict) -> str:
+    signing_input = f"{_b64(json.dumps({'alg': alg, 'typ': 'JWT'}).encode())}.{_b64(json.dumps(claims).encode())}"
+    if secret is None:
+        return signing_input + "."
+    return f"{signing_input}.{_b64(hmac.new(secret, signing_input.encode(), hashlib.sha256).digest())}"
+
+
+def check_weak_jwt(c):
+    def admin_report(token):
+        return c.get("/api/admin/report", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+
+    admin = {"sub": "alice", "role": "admin"}
+    token = re.search(r"eyJ[\w-]+\.[\w-]+\.[\w-]*", _text(c.get("/account"))).group(0)
+    signing_input, _, signature = token.rpartition(".")
+    attack = None
+    for alg in ("none", "None", "NONE"):
+        if admin_report(_forge(None, alg, admin)):
+            attack = f'an unsigned token with "alg": "{alg}" was accepted as admin'
+            break
+    if attack is None:
+        for word in WORDLIST.read_text().split():
+            if _b64(hmac.new(word.encode(), signing_input.encode(), hashlib.sha256).digest()) == signature:
+                if admin_report(_forge(word.encode(), "HS256", admin)):
+                    attack = f"the signing secret is the dictionary word {word!r}, so an admin token can be forged"
+                break
+    me = c.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+    header, payload, signature = token.split(".")
+    tampered = f"{header}.{_b64(json.dumps(admin).encode())}.{signature}"
+    broken = None
+    if me.status_code != 200 or me.get_json().get("sub") != "alice":
+        broken = "the token shown on the account page should still work for /api/me"
+    elif c.get("/api/me", headers={"Authorization": f"Bearer {tampered}"}).status_code == 200:
+        attack = attack or "a token with edited claims and the old signature was accepted"
+    return attack, broken
+
+
+def check_ssrf(c):
+    attack = None
+    for host in (
+        "127.0.0.1",
+        "localhost",
+        "[::1]",
+        "2130706433",
+        "127.1",
+        "0x7f.0.0.1",
+        "0.0.0.0",
+        "[::ffff:127.0.0.1]",
+    ):
+        url = f"http://{host}/internal/keys"
+        if "qb-billing-live" in _text(c.post("/invoices/import", data={"url": url})):
+            attack = f"importing {url} returned the internal billing keys"
+            break
+    public = c.post("/invoices/import", data={"url": "http://1.1.1.1/invoice.json"})
+    broken = (
+        None if public.status_code == 200 and "Lab sandbox" in _text(public) else "public URLs should still be accepted"
+    )
+    return attack, broken
+
+
+CHECKS = {
+    "sqli": check_sqli,
+    "reflected_xss": check_reflected_xss,
+    "stored_xss": check_stored_xss,
+    "idor": check_idor,
+    "path_traversal": check_path_traversal,
+    "open_redirect": check_open_redirect,
+    "mass_assignment": check_mass_assignment,
+    "csrf": check_csrf,
+    "weak_jwt": check_weak_jwt,
+    "ssrf": check_ssrf,
+}
