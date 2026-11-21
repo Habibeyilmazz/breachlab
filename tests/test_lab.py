@@ -27,6 +27,7 @@ def test_progress_page_lists_every_challenge(make_client):
 def test_challenge_page_shows_story_hints_and_fix_instructions(challenge, make_client):
     page = text(make_client(login=False).get(f"/lab/c/{challenge.id}"))
     assert page.count("<details>") == 3
+    assert "&lt;code&gt;" not in page and "ORIGIN" not in page  # hints are trusted HTML, rendered as such
     assert f"breachlab/vulnerable/{challenge.id}.py" in page
     assert f"pytest fix_tests -k {challenge.id}" in page
     assert "Why this fix works" in page
@@ -35,6 +36,11 @@ def test_challenge_page_shows_story_hints_and_fix_instructions(challenge, make_c
 def test_progress_page_says_when_the_reference_fixes_are_running(make_client):
     assert "running the reference fixes" in text(make_client("solutions", login=False).get("/lab"))
     assert "running the reference fixes" not in text(make_client("vulnerable", sqli="solutions").get("/lab"))
+
+
+def test_hints_use_the_address_the_learner_is_browsing(make_client):
+    page = text(make_client(login=False).get("/lab/c/ssrf", headers={"Host": "localhost:4160"}))
+    assert "Import <code>http://localhost:4160/internal/keys</code>" in page
 
 
 def test_unknown_challenge_is_a_404(make_client):
@@ -156,7 +162,14 @@ def test_non_local_clients_are_refused(make_client):
     assert client.get("/lab", environ_base={"REMOTE_ADDR": "127.0.0.1"}).status_code == 200
 
 
-@pytest.mark.parametrize("host", ["evil.example", "evil.example:4160", "127.0.0.1.evil.example", "192.168.1.10:4160"])
+@pytest.mark.parametrize(
+    "host",
+    [
+        "evil.example", "evil.example:4160", "127.0.0.1.evil.example", "192.168.1.10:4160", "127.0.0.2:4160",
+        "localhost@evil.example", "localhost:4160@evil.example", "localhost:port", "localhost:123456",
+        'localhost:4160"><script>alert(1)</script>', "localhost:4160/evil", "",
+    ],
+)  # fmt: skip
 def test_unknown_host_headers_are_refused(host, make_client):
     assert make_client(login=False).get("/lab", headers={"Host": host}).status_code == 403
 

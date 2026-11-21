@@ -16,10 +16,10 @@
     {% if captured %}<p class="lab-note">Your flag: <code>{{ challenge.flag }}</code></p>{% endif %}
     <p><a class="lab-btn" href="{{ challenge.start }}">Open {{ challenge.start }} in Quillbook</a></p>
     <div class="hints">
-      {% for hint in challenge.hints %}
+      {% for hint in hints %}
       <details>
         <summary>Hint {{ loop.index }}{{ ' (the answer)' if loop.last }}</summary>
-        <p>{{ hint|replace('ORIGIN', origin)|safe }}</p>
+        <p>{{ hint }}</p>
       </details>
       {% endfor %}
     </div>

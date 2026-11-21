@@ -35,6 +35,7 @@ from flask import (
     session,
     url_for,
 )
+from markupsafe import Markup
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash
 
@@ -44,6 +45,7 @@ from .challenges import BY_ID, CHALLENGES, FLAGS
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = PACKAGE_DIR.parent / ".breachlab"
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+HOST_HEADER = re.compile(r"(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?")
 USER_COLUMNS = {"username", "password_hash", "display_name", "email", "role", "credit_cents"}
 PROFILE_FIELDS = {"display_name", "email"}
 EMAIL = re.compile(r"[^@\s]+@[^@\s]+")
@@ -162,11 +164,10 @@ def create_app(data_dir=None, impl=None):
         domain at 127.0.0.1 to read this deliberately vulnerable app from your browser.
         """
         try:
-            host = urlsplit("//" + request.host).hostname
             remote_ok = ipaddress.ip_address(request.remote_addr or "").is_loopback
         except ValueError:
-            host, remote_ok = None, False
-        if not remote_ok or host not in LOOPBACK_HOSTS:
+            remote_ok = False
+        if not remote_ok or not HOST_HEADER.fullmatch(request.host):
             abort(403, "BreachLab only answers requests from and for this machine.")
         # The lab's own buttons (reset, verify) must not be forgeable from other origins.
         if request.method == "POST" and request.path.startswith("/lab"):
@@ -204,7 +205,7 @@ def create_app(data_dir=None, impl=None):
                 ),
             }
 
-        return {"lab_status": lab_status, "csrf_token": session.get("csrf", ""), "origin": own_origin()}
+        return {"lab_status": lab_status, "csrf_token": session.get("csrf", "")}
 
     @app.errorhandler(HTTPException)
     def http_error(error):
@@ -302,9 +303,9 @@ def create_app(data_dir=None, impl=None):
         try:
             parts = urlsplit(url)
             host, port = parts.hostname or "", parts.port or 80
+            own_port = urlsplit("//" + request.host).port or 80
         except ValueError:
             return "That is not a valid URL."
-        own_port = urlsplit("//" + request.host).port or 80
         if parts.scheme != "http" or not is_loopback_host(host) or port != own_port:
             return SANDBOX_NOTICE
         path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
@@ -432,6 +433,7 @@ def create_app(data_dir=None, impl=None):
         return render_template(
             "lab/challenge.html",
             challenge=challenge,
+            hints=[Markup(hint.replace("ORIGIN", own_origin())) for hint in challenge.hints],  # Host is validated
             number=position + 1,
             following=CHALLENGES[position + 1] if position + 1 < len(CHALLENGES) else None,
             state=store.progress(lab()).get(challenge_id),

@@ -3,6 +3,8 @@
 import argparse
 import sys
 
+from werkzeug.serving import is_running_from_reloader
+
 from .app import LOOPBACK_HOSTS, create_app, load_impl
 
 
@@ -31,7 +33,9 @@ def main(argv=None):
             "127.0.0.1 or ::1. Never expose it to a network."
         )
     app = create_app(impl=load_impl("solutions" if args.fixed else "vulnerable"))
-    print(f" * BreachLab ({'reference fixes' if args.fixed else 'vulnerable'}) on http://{args.host}:{args.port}/")
+    if args.no_reload or is_running_from_reloader():  # with the reloader, only the serving child announces itself
+        mode = "reference fixes" if args.fixed else "vulnerable"
+        print(f" * BreachLab ({mode}): open http://{'[::1]' if host == '::1' else host}:{args.port}/", flush=True)
     app.run(host=host, port=args.port, threaded=True, use_reloader=not args.no_reload)
 
 

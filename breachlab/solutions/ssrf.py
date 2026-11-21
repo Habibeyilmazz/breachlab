@@ -20,8 +20,9 @@ The secure pattern
     the address you checked (otherwise DNS can change between check and use),
     and do not follow redirects without re-checking each hop. "Not loopback" is
     not enough: private ranges (10/8, 192.168/16), link-local addresses and
-    multicast must be refused too, which is why this checks for "public" instead. Run the fetcher
-    with no ambient credentials, and firewall it from internal networks.
+    multicast must be refused too, which is why this checks for "public"
+    instead. Run the fetcher with no ambient credentials, and firewall it from
+    internal networks.
 """
 
 import ipaddress
