@@ -4,6 +4,42 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The forged JWT flag was captured without forging anything: after the mass assignment challenge
+  alice is a real admin, and the token her account page shows opened `/api/admin/report`. A token
+  Quillbook itself issued to a real admin now gets the report with a note and no flag.
+- The path traversal flag was awarded for any path outside `exports/`, even when the answer was a
+  404. It now needs a file that is actually served, or the sandbox notice for a path outside the
+  lab's data folder.
+- Saving a patch that does not import (a syntax error) no longer ends the server: it serves the
+  traceback as a plain page and recovers on the next save. An exception raised by patched code is
+  named on the 500 page and in the fix check.
+
+### Changed
+
+- The last hint really is the answer, as the README says: the CSRF hint holds the whole attacker
+  page, the JWT hint the finished unsigned token and curl command. The stored XSS hint no longer
+  asks for a reload that hid the flag banner.
+- The JWT fix stage says that the `SECRET` has to change too, not only `verify`.
+- README: run the fix test in a second terminal with the virtual environment activated.
+- `e2e/package-lock.json` is committed and CI installs the walkthrough with `npm ci`.
+
+### Notes for the next contributor
+
+- First-run check done from a fresh clone on macOS, Python 3.12: quickstart, every third hint
+  followed literally in Chromium, patch / "Check my fix" / `pytest fix_tests -k`, a syntax error and
+  recovery, `--fixed`, `--host ::1`, `--host localhost`, a refused `--host 0.0.0.0`, a busy port,
+  and the README's e2e steps all work as written.
+- Flag detection is where the bugs were. When you add a challenge, ask what else in the app can
+  reach its "success" state legitimately (another challenge's side effect, a failed request) and
+  add a test like `test_a_genuine_admin_token_is_not_a_forgery`.
+- Still open and deliberate, see Known limits in the README: XSS flags need `alert()`/`confirm()`/
+  `prompt()`, no RS256/HS256 confusion, the learner serves the CSRF attacker page with
+  `python3 -m http.server`, the reference SSRF fix resolves host names, Windows is unverified.
+
 ## [0.1.0] - 2026-11-21
 
 First release.

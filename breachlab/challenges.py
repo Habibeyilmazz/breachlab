@@ -82,8 +82,9 @@ CHALLENGES = [
             "Post a note containing <code>&lt;b&gt;bold?&lt;/b&gt;</code> and look at how it is displayed.",
             "The board keeps your HTML. Unlike the reflected case, the payload now lives in the database"
             " and fires for every visitor, no special link needed.",
-            "Post <code>&lt;script&gt;alert(document.domain)&lt;/script&gt;</code> as a note, then reload the"
-            " board. If the board becomes unusable, reset the app data from the progress page.",
+            "Post <code>&lt;script&gt;alert(document.domain)&lt;/script&gt;</code> as a note. It runs as soon"
+            " as the board comes back, and again for every visitor. Had enough of the pop-up? Reset the app data"
+            " on the challenge list.",
         ),
     ),
     Challenge(

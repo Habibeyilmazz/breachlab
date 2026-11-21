@@ -32,7 +32,8 @@
     <p class="lab-muted">Capture the flag first. Fixing a hole is easier once you have used it.</p>
     {% endif %}
     <p>The hole is in one function: <code>{{ challenge.function }}</code> in
-      <code>breachlab/vulnerable/{{ challenge.id }}.py</code>. Change it so the attack fails and the feature keeps
+      <code>breachlab/vulnerable/{{ challenge.id }}.py</code>{% if challenge.id == 'weak_jwt' %} (plus the
+      <code>SECRET</code> it signs with, a few lines above){% endif %}. Change it so the attack fails and the feature keeps
       working. The server restarts by itself when you save.</p>
     <p>Then run the provided test from the project folder, or use the button, which runs the same check:</p>
     <pre class="cmd">{{ test_command }}</pre>

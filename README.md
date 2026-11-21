@@ -36,9 +36,11 @@ stuck; the third one is the answer. When the attack works, the lab notices by it
 ![Quillbook's invoice search after an SQL injection, with the "Flag captured" banner](docs/screenshots/exploit.png)
 
 **2. Fix it.** The hole is always in one small function under `breachlab/vulnerable/`. Open the file
-named on the challenge page, patch the function, and run the provided test:
+named on the challenge page, patch the function, and run the provided test in a second terminal
+(the server keeps running in the first; activate the virtual environment there too):
 
 ```bash
+source .venv/bin/activate
 pytest fix_tests -k sqli
 ```
 
