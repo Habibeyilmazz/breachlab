@@ -11,7 +11,7 @@
 <body>
 {% set lab = lab_status() %}
 <a class="skip" href="#main">Skip to content</a>
-<header class="labbar">
+<nav class="labbar" aria-label="BreachLab">
   <a class="labbar-brand" href="{{ url_for('lab_index') }}">
     <img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="20" height="20">BreachLab
   </a>
@@ -24,7 +24,7 @@
   </ol>
   <span class="labbar-count">{{ lab.solved }} of {{ lab.challenges|length }} flags</span>
   <a class="labbar-link" href="{{ url_for('lab_index') }}">Challenges</a>
-</header>
+</nav>
 <div id="lab-announce" role="status">
   {% for c in lab.fresh %}
   <p class="flagbanner">Flag captured: <strong>{{ c.title }}</strong> <code>{{ c.flag }}</code>

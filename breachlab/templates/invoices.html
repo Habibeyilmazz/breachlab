@@ -12,6 +12,7 @@
 </form>
 {% if error %}<p class="qb-alert" role="alert">{{ error }}</p>{% endif %}
 {% if rows %}
+<div class="qb-scroll" role="region" aria-label="Invoices" tabindex="0">
 <table class="qb-table">
   <thead><tr><th scope="col">Number</th><th scope="col">Customer</th><th scope="col" class="num">Amount</th><th scope="col">Status</th></tr></thead>
   <tbody>
@@ -25,6 +26,7 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% elif not error %}
 <p class="qb-muted">No invoices match{% if query %} “{{ query }}”{% endif %}. <a href="{{ url_for('invoices') }}">Show all your invoices</a></p>
 {% endif %}

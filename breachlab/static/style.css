@@ -185,6 +185,7 @@ body:has(.lab) { background: var(--paper); }
 .qb input, .qb textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--qb-field); border-radius: 6px; background: var(--qb-bg); color: inherit; font: inherit; }
 .qb-search { display: flex; gap: 8px; margin-bottom: 16px; }
 .qb-search input { flex: 1; min-width: 0; }
+.qb-scroll { overflow-x: auto; }
 .qb-table { width: 100%; border-collapse: collapse; }
 .qb-table th, .qb-table td { padding: 9px 10px; border-bottom: 1px solid var(--qb-line); text-align: left; overflow-wrap: anywhere; }
 .qb-table th, .qb-table .num, .qb-status { overflow-wrap: normal; white-space: nowrap; }

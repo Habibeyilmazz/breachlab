@@ -412,3 +412,11 @@ def test_data_from_an_older_version_is_reseeded(tmp_path):
     client = create_app(tmp_path).test_client()
     checks._login(client)
     assert client.get("/account").status_code == 200
+
+
+@pytest.mark.parametrize("path", ["/invoices", "/notes", "/account", "/help", "/admin"])
+def test_quillbook_pages_have_one_banner_and_scrollable_tables_are_focusable(make_client, path):
+    # The lab bar is a nav, so Quillbook's own header is the only banner landmark (found with axe-core).
+    html = make_client().get(path).get_data(as_text=True)
+    assert html.count("<header") == 1
+    assert html.count("<table") == html.count('class="qb-scroll" role="region"')

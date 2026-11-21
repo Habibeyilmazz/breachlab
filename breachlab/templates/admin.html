@@ -3,6 +3,7 @@
 {% block content %}
 <h1>Admin console</h1>
 <p class="qb-ok">Administrator access confirmed. <code>{{ flag }}</code></p>
+<div class="qb-scroll" role="region" aria-label="Users" tabindex="0">
 <table class="qb-table">
   <thead><tr><th scope="col">Username</th><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col" class="num">Credit</th></tr></thead>
   <tbody>
@@ -11,4 +12,5 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

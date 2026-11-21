@@ -28,6 +28,7 @@
   <button class="qb-btn">Redeem</button>
 </form>
 {% if credits %}
+<div class="qb-scroll" role="region" aria-label="Credit history" tabindex="0">
 <table class="qb-table" id="credit-history">
   <caption class="qb-muted">Credit history</caption>
   <thead><tr><th scope="col">Voucher</th><th scope="col" class="num">Credit</th><th scope="col">When (UTC)</th></tr></thead>
@@ -35,6 +36,7 @@
     {% for row in credits %}<tr><td class="voucher">{{ row.voucher }}</td><td class="num">{{ row.cents|money }}</td><td>{{ row.created_at }}</td></tr>{% endfor %}
   </tbody>
 </table>
+</div>
 {% endif %}
 <h2>API access</h2>
 <p class="qb-muted">Send this token as <code>Authorization: Bearer …</code> to <code>/api/me</code>.</p>
