@@ -136,7 +136,8 @@ def _seed_files(data_dir: Path):
             text = f"Invoice {number}\nCustomer: {customer}\nAmount: ${cents / 100:,.2f}\nStatus: {status}\n{memo}\n"
             (files / "exports" / f"invoice-{number}.txt").write_text(text, encoding="utf-8")
     (files / "private" / "payroll-2026.txt").write_text(
-        f"Payroll 2026 (private)\nCarol Whitfield  9,900.00\nBob Ferreira     6,150.00\n{FLAGS['path_traversal']}\n"
+        f"Payroll 2026 (private)\nCarol Whitfield  9,900.00\nBob Ferreira     6,150.00\n{FLAGS['path_traversal']}\n",
+        encoding="utf-8",
     )
 
 

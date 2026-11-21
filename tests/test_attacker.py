@@ -98,6 +98,7 @@ def test_the_server_runs_mallorys_site_on_the_next_port_or_carries_on_without_it
     shutil.copytree(PACKAGE_DIR, tmp_path / "breachlab", ignore=shutil.ignore_patterns("__pycache__"))  # own data dir
     blocker = socket.socket()
     if busy:
+        blocker.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # the "free" run can leave the port in TIME_WAIT
         blocker.bind(("127.0.0.1", port + 1))
         blocker.listen()
     server = subprocess.Popen(
