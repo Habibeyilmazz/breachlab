@@ -38,6 +38,7 @@ from flask import (
 from markupsafe import Markup
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash
+from werkzeug.urls import iri_to_uri
 
 from . import store
 from .challenges import BY_ID, CHALLENGES, FLAGS
@@ -254,9 +255,14 @@ def create_app(data_dir=None, impl=None):
                 session["uid"] = user["id"]
                 session["csrf"] = secrets.token_urlsafe(24)
                 target = impl_().open_redirect.redirect_target(request.args.get("next", ""))
+                try:
+                    iri_to_uri(target)  # Werkzeug does this to Location later, outside Flask's error handling
+                    response = redirect(target)  # refuses line breaks
+                except ValueError:
+                    abort(400, "You are signed in, but that next address cannot be used in a redirect.")
                 if is_external(target, request.host_url):
                     award("open_redirect")
-                return redirect(target)
+                return response
             error = "Wrong username or password."
         return render_template("login.html", error=error, learner=store.LEARNER), 401 if error else 200
 
@@ -312,7 +318,11 @@ def create_app(data_dir=None, impl=None):
                 403,
                 mimetype="text/plain",
             )
-        if not real.is_file():
+        try:
+            found = real.is_file()
+        except OSError:  # e.g. a name longer than the file system allows
+            found = False
+        if not found:
             abort(404, "No such export.")
         if not real.is_relative_to(exports_dir):  # only a file that is really handed over counts
             award("path_traversal")
@@ -502,8 +512,9 @@ def create_app(data_dir=None, impl=None):
     @app.post("/lab/xss")
     def lab_xss():
         """Called by the alert() hook in lab.js: script ran on a page, so the XSS worked."""
-        path = str((request.get_json(silent=True) or {}).get("path", ""))
-        challenge_id = {"/notes": "stored_xss", "/help": "reflected_xss"}.get(path)
+        report = request.get_json(silent=True)
+        path = report.get("path") if isinstance(report, dict) else None
+        challenge_id = {"/notes": "stored_xss", "/help": "reflected_xss"}.get(path if isinstance(path, str) else "")
         if challenge_id is None:
             return jsonify(captured=None)
         if not store.award(lab(), challenge_id):

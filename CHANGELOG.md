@@ -17,6 +17,9 @@ All notable changes to this project are documented here. The format follows
 - Saving a patch that does not import (a syntax error) no longer ends the server: it serves the
   traceback as a plain page and recovers on the next save. An exception raised by patched code is
   named on the 500 page and in the fix check.
+- Odd input no longer ends in a 500: a `next` address that cannot be a `Location` header
+  (`http://[`, a bad port, a line break) is a 400 after sign-in, an export name longer than the file
+  system allows is a 404, and the XSS beacon ignores JSON that is not an object.
 
 ### Changed
 

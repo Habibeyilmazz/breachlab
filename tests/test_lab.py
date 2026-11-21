@@ -193,6 +193,26 @@ def test_import_preview_keeps_the_user_signed_in(make_client):
     assert "Sign out" in text(client.get("/invoices"))
 
 
+@pytest.mark.parametrize("target", ["http://[", "http://a:99999999/", "http://127.0.0.1:x/", "/x\r\nSet-Cookie: a=b"])
+def test_a_next_address_that_cannot_be_a_redirect_is_a_400_not_a_crash(target, make_client):
+    client = make_client(login=False)
+    response = client.post(
+        "/login", query_string={"next": target}, data={"username": "alice", "password": "alice-demo"}
+    )
+    assert response.status_code == 400 and "Set-Cookie: a=b" not in str(response.headers)
+    assert "Sign out" in text(client.get("/invoices"))  # the sign-in itself went through
+
+
+def test_an_overlong_export_name_is_a_404(make_client):
+    assert make_client().get("/exports/download", query_string={"file": "x" * 5000}).status_code == 404
+
+
+@pytest.mark.parametrize("body", [[1], "x", 7, None, {"path": {"a": 1}}, {"path": ["/notes"]}])
+def test_xss_beacon_ignores_malformed_reports(body, make_client, captured):
+    assert make_client().post("/lab/xss", json=body).get_json() == {"captured": None}
+    assert captured() == set()
+
+
 def test_internal_keys_are_refused_to_browsers(make_client, captured):
     response = make_client().get("/internal/keys")
     assert response.status_code == 403 and "qb-billing" not in text(response)
