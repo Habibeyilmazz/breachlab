@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint and tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Byte-compile
+        run: python -m compileall -q breachlab
+      - name: Tests (exploitable when vulnerable, closed when fixed, safety rails)
+        run: pytest
+      - name: The provided fix tests fail on the vulnerable code
+        run: |
+          if pytest fix_tests -q; then
+            echo "fix_tests passed on vulnerable code: they prove nothing" >&2
+            exit 1
+          fi
+      - name: The provided fix tests pass on the reference fixes
+        run: BREACHLAB_IMPL=solutions pytest fix_tests -q
+      - name: The server starts on loopback and refuses any other bind address
+        run: |
+          python -m breachlab --no-reload --port 4160 &
+          server=$!
+          for attempt in $(seq 1 20); do curl -fsS http://127.0.0.1:4160/lab > /dev/null && break; sleep 0.5; done
+          curl -fsS http://127.0.0.1:4160/lab | grep -q "Break it, then fix it."
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:4160/lab)" = 403
+          kill "$server"; wait "$server" || true
+          if python -m breachlab --host 0.0.0.0 --no-reload; then
+            echo "bound to 0.0.0.0" >&2
+            exit 1
+          fi
+
+  browser:
+    name: Browser walkthrough (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pip install -r requirements.txt
+      - name: Install Playwright and Chromium
+        working-directory: e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Every exploit works in a real browser and its flag is captured
+        run: |
+          python -m breachlab --no-reload &
+          server=$!
+          for attempt in $(seq 1 20); do curl -fsS http://127.0.0.1:4160/lab > /dev/null && break; sleep 0.5; done
+          node e2e/solve.cjs
+          kill "$server"; wait "$server" || true
+      - name: Every exploit fails on the reference fixes
+        run: |
+          python -m breachlab --fixed --no-reload &
+          server=$!
+          for attempt in $(seq 1 20); do curl -fsS http://127.0.0.1:4160/lab > /dev/null && break; sleep 0.5; done
+          MODE=fixed node e2e/solve.cjs
+          kill "$server"; wait "$server" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: walkthrough-screenshots
+          path: e2e/out/
+          if-no-files-found: ignore
