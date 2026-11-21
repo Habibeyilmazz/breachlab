@@ -145,7 +145,8 @@ def money(value):
     return f"${value / 100:,.2f}" if isinstance(value, int) else str(value)
 
 
-def create_app(data_dir=None, impl=None):
+def create_app(data_dir=None, impl=None, attacker_port=None):
+    """attacker_port: where Mallory's site (attacker.py) is being served, or None when it is not."""
     data_dir = Path(data_dir or DEFAULT_DATA_DIR).resolve()
     app = Flask(__name__)
     app.config.update(
@@ -154,6 +155,7 @@ def create_app(data_dir=None, impl=None):
         DATA_DIR=data_dir,
         IMPL=impl or load_impl(),
         INTERNAL_TOKEN=secrets.token_hex(16),
+        ATTACKER_PORT=attacker_port,
     )
     app.jinja_env.filters["money"] = money
     files_root = data_dir / "files"
@@ -485,8 +487,19 @@ def create_app(data_dir=None, impl=None):
         return render_template("lab/index.html")
 
     def challenge_page(challenge_id, report=None):
+        from . import attacker
+
         challenge = BY_ID.get(challenge_id) or abort(404, "No such challenge.")
         position = CHALLENGES.index(challenge)
+        port = current_app.config["ATTACKER_PORT"]
+        mallory = None
+        if challenge_id == "csrf":
+            host = HOST_HEADER.fullmatch(request.host).group(1)  # validated by loopback_only
+            mallory = {
+                "url": f"http://{host}:{port}/" if port else None,
+                "page": attacker.read_page(data_dir),
+                "limit": attacker.MAX_PAGE,
+            }
         return render_template(
             "lab/challenge.html",
             challenge=challenge,
@@ -496,6 +509,7 @@ def create_app(data_dir=None, impl=None):
             state=store.progress(lab()).get(challenge_id),
             solution=(PACKAGE_DIR / "solutions" / f"{challenge_id}.py").read_text(),
             report=report,
+            mallory=mallory,
         )
 
     @app.get("/lab/c/<challenge_id>")
@@ -512,11 +526,25 @@ def create_app(data_dir=None, impl=None):
         store.set_fixed(lab(), challenge_id, report.ok)
         return challenge_page(challenge_id, report)
 
+    @app.post("/lab/attacker")
+    def lab_attacker():
+        """Save the page Mallory's site serves (CSRF challenge). Same-origin only, like every lab action."""
+        from . import attacker
+
+        page = request.form.get("page", "")
+        if len(page) > attacker.MAX_PAGE:
+            abort(413, f"Mallory's page can be at most {attacker.MAX_PAGE:,} characters.")
+        attacker.page_path(data_dir).write_text(page)
+        return redirect(url_for("lab_challenge", challenge_id="csrf", saved=1) + "#mallory")
+
     @app.post("/lab/reset")
     def lab_reset():
+        from . import attacker
+
         store.seed_app(data_dir)
         if request.form.get("what") == "everything":
             store.reset_progress(lab())
+            attacker.page_path(data_dir).unlink(missing_ok=True)
         return redirect(url_for("lab_index", reset=1))
 
     @app.post("/lab/xss")

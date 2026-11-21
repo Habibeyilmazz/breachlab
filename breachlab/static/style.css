@@ -147,6 +147,12 @@ body:has(.lab) { background: var(--paper); }
 .hints details, .solution { border: 1px solid var(--line); border-radius: 4px; background: var(--paper); }
 .hints summary, .solution summary { padding: 8px 12px; cursor: pointer; font-weight: 600; font-family: var(--sans); font-size: 15px; }
 .hints p { margin: 0; padding: 0 12px 12px; }
+.mallory { margin-top: 22px; font: 15px/1.55 var(--sans); }
+.mallory h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.mallory label { display: block; margin: 10px 0 4px; font-weight: 600; }
+.mallory textarea { box-sizing: border-box; width: 100%; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); font: 14px/1.5 var(--mono); }
+.mallory .lab-actions { align-items: center; }
+.mallory .lab-actions p { margin: 0; }
 .solution { margin-top: 18px; }
 .solution > p { margin: 0; padding: 0 12px 8px; }
 .cmd, .code { margin: 0 0 14px; padding: 12px 14px; background: var(--night); color: #eef0fb; border-radius: 4px; font-size: 14px; line-height: 1.5; }

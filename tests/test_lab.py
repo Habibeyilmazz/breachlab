@@ -154,13 +154,18 @@ def test_saving_a_syntax_error_does_not_kill_the_server(tmp_path):
             time.sleep(0.2)
         raise AssertionError(f"still waiting for {status} with {needle!r}; last saw {seen}")
 
-    server = subprocess.Popen([sys.executable, "-m", "breachlab", "--port", str(port)], cwd=tmp_path)
+    server = subprocess.Popen(
+        [sys.executable, "-m", "breachlab", "--port", str(port), "--attacker-port", "4165"], cwd=tmp_path
+    )
     try:
         wait_for(200, "Break it, then fix it.")
         patched.write_text(good + "\ndef oops(:\n")
         wait_for(500, "SyntaxError")
         patched.write_text(good)
         wait_for(200, "Break it, then fix it.")
+        # The restarted server serves Mallory's site again on the same port.
+        with urllib.request.urlopen("http://127.0.0.1:4165/", timeout=5) as response:
+            assert b"Win a free coffee!" in response.read()
     finally:
         server.terminate()  # the reloader parent takes its serving child down with it
         server.wait(timeout=10)

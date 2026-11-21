@@ -185,12 +185,11 @@ CHALLENGES = [
         hints=(
             "Write an HTML page with a form whose <code>action</code> is this app's <code>/account</code> URL and"
             " whose fields are <code>display_name</code> and <code>email</code>.",
-            "Serve the page from another port so it has a different origin:"
-            " <code>python3 -m http.server 8001 --bind 127.0.0.1</code>, then open it at"
-            " <code>http://127.0.0.1:8001/</code> in the browser where you are signed in. Use the same host name"
-            " (127.0.0.1 or localhost) you use for the lab.",
-            "Make it fire by itself. The whole attacker page, to save as <code>index.html</code> in the folder you"
-            " serve: <code>&lt;form method=&quot;post&quot; action=&quot;ORIGIN/account&quot;&gt;&lt;input"
+            "The page has to come from another origin. Write it in the <em>Mallory's site</em> box below, save,"
+            " and open Mallory's site in the browser where you are signed in. It runs on the next port of this"
+            " host: a different origin, but the same site, so the <code>SameSite=Lax</code> cookie still goes along.",
+            "Make it fire by itself. The whole attacker page, to paste into Mallory's site:"
+            " <code>&lt;form method=&quot;post&quot; action=&quot;ORIGIN/account&quot;&gt;&lt;input"
             " name=&quot;display_name&quot; value=&quot;Alice&quot;&gt;&lt;input name=&quot;email&quot;"
             " value=&quot;mallory@evil.test&quot;&gt;&lt;/form&gt;"
             "&lt;script&gt;document.forms[0].submit()&lt;/script&gt;</code>"

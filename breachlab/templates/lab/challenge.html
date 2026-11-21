@@ -23,6 +23,29 @@
       </details>
       {% endfor %}
     </div>
+    {% if mallory %}
+    <div class="mallory" id="mallory">
+      <h3>Mallory's site</h3>
+      {% if mallory.url %}
+      <p class="lab-muted">The attacker's website, built in: the page you save here is served at
+        <a href="{{ mallory.url }}">{{ mallory.url }}</a>, a different origin from the lab (another port of the same
+        host). Open it in this browser while you are signed in to Quillbook.</p>
+      {% else %}
+      <p class="lab-note">Mallory's site is not running (its port was busy when the lab started). Save the page below
+        as <code>index.html</code> in an empty folder and serve it yourself:
+        <code>python3 -m http.server 8001 --bind 127.0.0.1</code>, then open <code>http://127.0.0.1:8001/</code>.</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('lab_attacker') }}">
+        <label for="mallory-page">HTML of Mallory's page</label>
+        <textarea id="mallory-page" name="page" rows="9" maxlength="{{ mallory.limit }}" spellcheck="false">{{ mallory.page }}</textarea>
+        <div class="lab-actions">
+          <button class="lab-btn">Save page</button>
+          {% if request.args.saved %}<p class="lab-muted" role="status">Saved.{% if mallory.url %} Now open
+            <a href="{{ mallory.url }}">Mallory's site</a>.{% endif %}</p>{% endif %}
+        </div>
+      </form>
+    </div>
+    {% endif %}
   </section>
 
   <section class="stage" aria-labelledby="stage2">
