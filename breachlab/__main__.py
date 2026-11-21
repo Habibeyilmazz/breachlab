@@ -81,7 +81,8 @@ def main(argv=None):
         print(f" * BreachLab ({mode}): open {origin(host, args.port)}/", flush=True)
     if serving and attacker_port:
         print(f" * Mallory's site (CSRF challenge): {origin(host, attacker_port)}/", flush=True)
-    app.run(host=host, port=args.port, threaded=True, use_reloader=not args.no_reload)
+    # debug=False beats FLASK_DEBUG=1 from the shell: Werkzeug's debugger console would run outside every safety rail.
+    app.run(host=host, port=args.port, threaded=True, use_reloader=not args.no_reload, debug=False)
 
 
 if __name__ == "__main__":

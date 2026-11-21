@@ -1,5 +1,6 @@
 """Mallory's site: the built-in attacker origin for the CSRF challenge."""
 
+import os
 import shutil
 import socket
 import subprocess
@@ -119,6 +120,29 @@ def test_the_server_runs_mallorys_site_on_the_next_port_or_carries_on_without_it
         output = server.communicate(timeout=10)[0]
         blocker.close()
     assert ("could not start" in output) is busy
+
+
+def test_flask_debug_in_the_environment_does_not_turn_on_the_werkzeug_debugger(tmp_path):
+    """The debugger's console runs Python and sits in front of the Host and cross-site checks."""
+    port = 4164
+    shutil.copytree(PACKAGE_DIR, tmp_path / "breachlab", ignore=shutil.ignore_patterns("__pycache__"))
+    server = subprocess.Popen(
+        [sys.executable, "-m", "breachlab", "--no-reload", "--port", str(port), "--attacker-port", "4163"],
+        cwd=tmp_path,
+        env={**os.environ, "FLASK_DEBUG": "1"},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        _get(f"http://127.0.0.1:{port}/lab")  # wait until it serves
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/console", timeout=5)
+        assert error.value.code == 404 and b"Werkzeug Debugger" not in error.value.read()
+    finally:
+        server.terminate()
+        output = server.communicate(timeout=10)[0]
+    assert "Debug mode: on" not in output
 
 
 def test_a_page_with_non_ascii_text_survives_the_round_trip(lab, tmp_path):
