@@ -76,6 +76,28 @@ def test_the_token_spelled_out_in_the_last_jwt_hint_is_the_answer(make_client, c
     assert captured() == {"weak_jwt"}
 
 
+def test_a_genuine_admin_token_is_not_a_forgery(make_client, captured):
+    """After the mass assignment challenge alice is a real admin: her own token must not capture the JWT flag."""
+    client = make_client("vulnerable")
+    checks._save_account(client, display_name="Alice Moreau", email="alice@quillbook.test", role="admin")
+    token = re.search(r"eyJ[\w-]+\.[\w-]+\.[\w-]*", client.get("/account").get_data(as_text=True)).group(0)
+    report = client.get("/api/admin/report", headers={"Authorization": f"Bearer {token}"})
+    assert report.status_code == 200 and "flag" not in report.get_json() and "forge" in report.get_json()["note"]
+    assert captured() == {"mass_assignment"}
+    forged = {"Authorization": f"Bearer {UNSIGNED_ADMIN_TOKEN}"}  # the real attack still counts for an admin alice
+    assert "flag" in client.get("/api/admin/report", headers=forged).get_json()
+    assert captured() == {"mass_assignment", "weak_jwt"}
+
+
+def test_traversal_flag_needs_a_file_not_a_404(make_client, captured):
+    client = make_client("vulnerable")
+    for name in ("../nothing-here.txt", "..", "../private"):
+        assert client.get("/exports/download", query_string={"file": name}).status_code == 404
+    assert captured() == set()
+    assert client.get("/exports/download", query_string={"file": "../private/payroll-2026.txt"}).status_code == 200
+    assert captured() == {"path_traversal"}
+
+
 @pytest.mark.parametrize("token", ["", "abc", "a.b.c", "e30.e30.", "W10.W10.", "!!.!!.!!"])
 @pytest.mark.parametrize("package", ["vulnerable", "solutions"])
 def test_malformed_tokens_are_rejected_without_crashing(make_client, package, token):

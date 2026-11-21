@@ -303,10 +303,9 @@ def create_app(data_dir=None, impl=None):
             abort(400, "Bad file name.")
         if real is None:
             abort(404, "No such export.")
-        if not real.is_relative_to(exports_dir):
-            award("path_traversal")
         # Safety rail: the hole may leave exports/, but the lab never reads outside its own data folder.
         if not real.is_relative_to(files_root):
+            award("path_traversal")
             return Response(
                 f"Lab sandbox: this request escaped the exports folder and a real server would now read {real}.\n"
                 "BreachLab only serves files from its own data folder. Try ../private/ instead.\n",
@@ -315,6 +314,8 @@ def create_app(data_dir=None, impl=None):
             )
         if not real.is_file():
             abort(404, "No such export.")
+        if not real.is_relative_to(exports_dir):  # only a file that is really handed over counts
+            award("path_traversal")
         return Response(real.read_text(errors="replace"), mimetype="text/plain")
 
     def fetch_sandboxed(url):
@@ -426,24 +427,36 @@ def create_app(data_dir=None, impl=None):
         users = db().execute("SELECT username, display_name, email, role, credit_cents FROM users").fetchall()
         return render_template("admin.html", users=users, flag=FLAGS["mass_assignment"])
 
-    def bearer_claims():
+    def bearer():
+        """Return (token, claims) for the request's Bearer token, or answer 401."""
         scheme, _, token = request.headers.get("Authorization", "").partition(" ")
-        claims = impl_().weak_jwt.verify(token.strip()) if scheme.lower() == "bearer" else None
+        token = token.strip()
+        claims = impl_().weak_jwt.verify(token) if scheme.lower() == "bearer" else None
         if not isinstance(claims, dict):
             abort(401, "A valid Bearer token is required.")
-        return claims
+        return token, claims
 
     @app.get("/api/me")
     def api_me():
-        return jsonify(bearer_claims())
+        return jsonify(bearer()[1])
 
     @app.get("/api/admin/report")
     def api_admin_report():
-        if bearer_claims().get("role") != "admin":
+        token, claims = bearer()
+        if claims.get("role") != "admin":
             abort(403, "This token does not have the admin role.")
-        award("weak_jwt")
         total = db().execute("SELECT SUM(amount_cents) FROM invoices").fetchone()[0]
-        return jsonify(report="all-workspaces revenue", total_cents=total, flag=FLAGS["weak_jwt"])
+        report = {"report": "all-workspaces revenue", "total_cents": total}
+        # Alice can make herself a real admin (mass assignment). The token Quillbook then issues her is no forgery.
+        holder = db().execute("SELECT * FROM users WHERE username = ?", (str(claims.get("sub", "")),)).fetchone()
+        if holder and token == impl_().weak_jwt.issue({"sub": holder["username"], "role": holder["role"]}):
+            note = (
+                "This is the token Quillbook issued to a real admin account, so nothing was forged. "
+                "Reset the app data on the lab page to be an ordinary user again, or forge a token of your own."
+            )
+            return jsonify(**report, note=note)
+        award("weak_jwt")
+        return jsonify(**report, flag=FLAGS["weak_jwt"])
 
     # ---- lab pages ------------------------------------------------------------------
 
