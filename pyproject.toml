@@ -1,0 +1,19 @@
+[project]
+name = "breachlab"
+version = "0.1.0"
+description = "Learn web security by breaking, then fixing, a small vulnerable app on localhost."
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["flask>=3.0,<4"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]  # the formatter wraps code; long prose strings stay readable
