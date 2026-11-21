@@ -107,17 +107,22 @@ created on first start. Delete the folder or use the reset buttons at any time.
 
 These are part of the lab, not part of any challenge:
 
-- **Loopback only.** `python -m breachlab --host 0.0.0.0` exits with an error. Independently of how the
+- **Loopback only.** `--host` accepts `127.0.0.1`, `localhost` and `::1`; anything else, such as
+  `python -m breachlab --host 0.0.0.0`, exits with an error. Independently of how the
   server was started, every request is refused unless the client address is loopback and the `Host`
   header is `127.0.0.1`, `localhost` or `[::1]`. The Host check also blocks DNS rebinding from a
   hostile website open in the same browser.
 - **No outbound connections.** The SSRF challenge is real from the learner's side, but the "fetch" is
   sandboxed: a URL that points back at the lab is dispatched in-process, and anything else gets a
-  notice instead of a request. The lab cannot be used to reach your network.
+  notice instead of a request. The lab cannot be used to reach your network. One caveat: a correct
+  SSRF fix has to resolve the host name it is given, so with the reference fix (or your own) a DNS
+  lookup for the name you typed can leave your machine. No HTTP request ever does.
 - **Fenced file access.** The path traversal hole can leave the `exports` folder, but the lab only
   ever serves files from its own `.breachlab/files/` folder. An attempt to read `/etc/passwd` still
   captures the flag, and gets an explanation instead of the file.
 - **Lab actions are same-origin.** Reset, "Check my fix" and the XSS beacon reject posts from other origins.
+
+The rails limit what a mistake can cost; they do not make the app safe. Stop the server when you are not practising.
 
 ## Tests
 
@@ -128,7 +133,10 @@ BREACHLAB_IMPL=solutions pytest fix_tests  # the provided tests against the refe
 
 The suite proves, for each of the ten challenges, that the attack succeeds and the flag is captured
 on the vulnerable code, that the reference fix blocks the attack while the feature keeps working, and
-that fixing one challenge alone turns its test green. It also covers the safety rails above.
+that fixing one challenge alone turns its test green. The checks are tested too: a set of plausible
+half-fixes (escaping only the first quote, stripping only `<script>` tags, refusing only loopback
+addresses, and so on) must fail them, and sound alternative fixes must pass. The suite also covers the
+safety rails above.
 
 Script execution for the two XSS challenges cannot be observed without a browser, so pytest proves
 them by the payload arriving unescaped in the HTML. `e2e/solve.cjs` covers the rest of the way: it

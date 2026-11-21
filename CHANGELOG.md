@@ -35,6 +35,9 @@ First release.
   `vulnerable/`, a module in `solutions/`, a function in `checks.CHECKS`, and the route in `app.py`
   that calls the module and awards the flag. `tests/test_challenges.py` is parametrized over
   `CHALLENGES` and will fail loudly if one of them is missing.
+- The checks in `checks.py` are themselves under test: `HALF_FIXES` and `SOUND_ALTERNATIVES` in
+  `tests/test_challenges.py` hold fixes a check must reject or accept. When you add an attack
+  variation, add the half-fix that motivated it there.
 - `fix_tests/` is meant to fail on a clean checkout (it tests `vulnerable/`). Do not add it to
   pytest's `testpaths`; CI asserts both that it fails on vulnerable code and passes with
   `BREACHLAB_IMPL=solutions`.
