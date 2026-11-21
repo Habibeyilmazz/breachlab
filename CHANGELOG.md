@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed (first-run review, round 9)
+
+- Fresh clone, README quickstart followed literally on macOS (Python 3.12): install, `pytest`, the
+  learner's `pytest fix_tests -k sqli` and `node e2e/solve.cjs` (11 of 11 flags) all work as written.
+- The race condition check no longer depends on thread timing. It hands the learner's function a
+  connection whose `SELECT`s pause 50 ms, so "check again just before the write" fails every time
+  instead of passing by luck; the reference fix and a `threading.Lock` still pass. Test:
+  `test_a_narrowed_race_window_fails_the_check_even_when_requests_do_not_arrive_together` (fails without the change).
+- `test_the_server_runs_mallorys_site_on_the_next_port_or_carries_on_without_it[busy]` failed in the fresh
+  clone on macOS (it passes when rerun): the "free" run leaves port 4168 in `TIME_WAIT`, and the test's blocker socket
+  could not bind it. The blocker now sets `SO_REUSEADDR`.
+- The seeded payroll file was the one file still written in the platform's default encoding; now UTF-8.
+
 ### Security
 
 - Any website open in the learner's browser could drive the deliberately vulnerable app: a link
@@ -29,8 +42,7 @@ All notable changes to this project are documented here. The format follows
   page scroll at 320 px (now each sits in a keyboard-focusable, labelled scroll region). After the fix: zero
   violations, no horizontal page scroll. Test: `test_quillbook_pages_have_one_banner_and_scrollable_tables_are_focusable`.
 - `docs/demo.gif` re-recorded from the running app; it shows eleven seals and "0 of 11 flags".
-- Not changed: the race check can still be passed by luck with a narrowed-window half-fix (documented in README);
-  Windows and Safari remain untested.
+- Not changed: Windows and Safari remain untested.
 
 ### Added
 

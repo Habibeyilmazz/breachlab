@@ -13,9 +13,11 @@ import json
 import re
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
+from types import SimpleNamespace
 
 from flask import got_request_exception
 
@@ -323,9 +325,44 @@ def _redeem(client, code):
     return client.post("/account/voucher", data={"csrf_token": _csrf_token(client), "code": code})
 
 
+class _SlowReads:
+    """A database connection that pauses after every SELECT, like a busy server would.
+
+    A patch that checks "unused" and writes "used" as two statements then loses the race every
+    time, not only when thread timing is unlucky. Check and claim in one statement (or under a
+    lock) do not care how long a read takes.
+    """
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __enter__(self):
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        return self._conn.__exit__(*exc)
+
+    def execute(self, sql, *args, **kwargs):
+        cursor = self._conn.execute(sql, *args, **kwargs)
+        if sql.lstrip().upper().startswith("SELECT"):
+            time.sleep(0.05)
+        return cursor
+
+
 def check_race_condition(c):
     app = c.application
     app.config["PARTNER_SECONDS"] = 0.3
+    redeem_voucher = app.config["IMPL"].race_condition.redeem_voucher
+    app.config["IMPL"] = SimpleNamespace(
+        **{
+            **vars(app.config["IMPL"]),
+            "race_condition": SimpleNamespace(redeem_voucher=lambda db, *args: redeem_voucher(_SlowReads(db), *args)),
+        }
+    )
     requests = []
     for _ in range(4):  # sign in first, so the four requests below differ only in when they arrive
         client = app.test_client()

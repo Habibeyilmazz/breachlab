@@ -203,10 +203,11 @@ It has eleven challenges, not hundreds, and it is not a replacement for any of t
   explained in the reference fix but not playable (it needs RSA, and the lab has no crypto dependency).
 - On the open redirect challenge, backslash tricks such as `/\evil.example` do not work as attacks
   here because Werkzeug percent-encodes them. The fix test still requires your code to reject them.
-- The race condition check sends four simultaneous redemptions. A patch that only narrows the gap
-  (checking again just before the write, without making check and write one step) can pass it by luck.
-  A `threading.Lock` around the function passes too; it closes the race in this one-process lab but not
-  in an app with several workers, which the reference fix explains.
+- The race condition check sends four simultaneous redemptions and makes every `SELECT` your function
+  runs through `db.execute` take an extra 50 ms, so a patch that only narrows the gap (checking again just
+  before the write) still loses. A read through `db.cursor()` skips that delay. A `threading.Lock` around
+  the function passes; it closes the race in this one-process lab but not in an app with several workers,
+  which the reference fix explains.
 - One learner per checkout: progress is global, not per user.
 
 ## Roadmap

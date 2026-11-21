@@ -2,8 +2,10 @@
 
 import hashlib
 import hmac
+import itertools
 import re
 import threading
+import time
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
@@ -159,6 +161,28 @@ def _claim_but_ignore_the_answer(db, user_id, code, partner_confirms):
         db.execute("UPDATE vouchers SET redeemed_by = ? WHERE code = ? AND redeemed_by IS NULL", (user_id, code))
         db.execute("UPDATE users SET credit_cents = credit_cents + ? WHERE id = ?", (voucher["cents"], user_id))
     return voucher["cents"]
+
+
+_arrivals = itertools.count()
+
+
+def _check_again_just_before_the_write(db, user_id, code, partner_confirms):
+    """Narrows the window to microseconds, but check and write are still two steps."""
+    if not partner_confirms(code):
+        return None
+    time.sleep(0.02 * (next(_arrivals) % 4))  # scheduling jitter: the four requests reach the check 20 ms apart
+    voucher = db.execute("SELECT cents, redeemed_by FROM vouchers WHERE code = ?", (code,)).fetchone()
+    if voucher is None or voucher["redeemed_by"] is not None:
+        return None
+    with db:
+        db.execute("UPDATE vouchers SET redeemed_by = ? WHERE code = ?", (user_id, code))
+        db.execute("UPDATE users SET credit_cents = credit_cents + ? WHERE id = ?", (voucher["cents"], user_id))
+    return voucher["cents"]
+
+
+def test_a_narrowed_race_window_fails_the_check_even_when_requests_do_not_arrive_together(make_client):
+    attack, _broken = _with(make_client, "race_condition", redeem_voucher=_check_again_just_before_the_write)
+    assert attack is not None
 
 
 _one_at_a_time = threading.Lock()
