@@ -12,6 +12,7 @@ import hmac
 import json
 import re
 import tempfile
+import threading
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -318,6 +319,48 @@ def check_ssrf(c):
     return attack, broken
 
 
+def _redeem(client, code):
+    return client.post("/account/voucher", data={"csrf_token": _csrf_token(client), "code": code})
+
+
+def check_race_condition(c):
+    app = c.application
+    app.config["PARTNER_SECONDS"] = 0.3
+    requests = []
+    for _ in range(4):  # sign in first, so the four requests below differ only in when they arrive
+        client = app.test_client()
+        _login(client)
+        requests.append((client, _csrf_token(client)))
+    start = threading.Barrier(len(requests))
+
+    def redeem(client, token):
+        start.wait()
+        client.post("/account/voucher", data={"csrf_token": token, "code": "QB-WELCOME-10"})
+
+    threads = [threading.Thread(target=redeem, args=request) for request in requests]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    credit = _alice_record(c)["credit_cents"]
+    attack = None
+    if credit > 2500 + 1000:
+        attack = (
+            f"four simultaneous redemptions of QB-WELCOME-10 took alice's credit from $25.00 to ${credit / 100:,.2f}"
+        )
+    broken = (
+        None if credit >= 2500 + 1000 else "one of four simultaneous redemptions of QB-WELCOME-10 should credit $10"
+    )
+    _redeem(c, "QB-WELCOME-10")
+    if attack is None and _alice_record(c)["credit_cents"] != credit:
+        attack = "QB-WELCOME-10 was credited again when redeemed a second time, one request after the other"
+    credit = _alice_record(c)["credit_cents"]
+    _redeem(c, "QB-SPRING-25")
+    if _alice_record(c)["credit_cents"] != credit:
+        broken = broken or "QB-SPRING-25 was withdrawn by the voucher partner, so it must not be credited"
+    return attack, broken
+
+
 CHECKS = {
     "sqli": check_sqli,
     "reflected_xss": check_reflected_xss,
@@ -329,4 +372,5 @@ CHECKS = {
     "csrf": check_csrf,
     "weak_jwt": check_weak_jwt,
     "ssrf": check_ssrf,
+    "race_condition": check_race_condition,
 }

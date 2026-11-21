@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import re
+import threading
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
@@ -19,8 +20,8 @@ IDS = [c.id for c in CHALLENGES]
 BROWSER_DETECTED = {"reflected_xss", "stored_xss"}
 
 
-def test_there_are_ten_challenges_with_three_hints_each():
-    assert len(CHALLENGES) == len(set(IDS)) == len(checks.CHECKS) == 10
+def test_there_are_eleven_challenges_with_three_hints_each():
+    assert len(CHALLENGES) == len(set(IDS)) == len(checks.CHECKS) == 11
     assert all(len(c.hints) == 3 and all(c.hints) for c in CHALLENGES)
 
 
@@ -149,7 +150,27 @@ def _refuse_loopback_only(url):
     return urlsplit(url).scheme in ("http", "https") and not is_loopback_host(urlsplit(url).hostname or "")
 
 
+def _claim_but_ignore_the_answer(db, user_id, code, partner_confirms):
+    """Adds the atomic claim, but still credits when the claim found the voucher already taken."""
+    voucher = db.execute("SELECT cents, redeemed_by FROM vouchers WHERE code = ?", (code,)).fetchone()
+    if voucher is None or voucher["redeemed_by"] is not None or not partner_confirms(code):
+        return None
+    with db:
+        db.execute("UPDATE vouchers SET redeemed_by = ? WHERE code = ? AND redeemed_by IS NULL", (user_id, code))
+        db.execute("UPDATE users SET credit_cents = credit_cents + ? WHERE id = ?", (voucher["cents"], user_id))
+    return voucher["cents"]
+
+
+_one_at_a_time = threading.Lock()
+
+
+def _redeem_under_a_lock(*args):
+    with _one_at_a_time:
+        return load_impl("vulnerable").race_condition.redeem_voucher(*args)
+
+
 HALF_FIXES = {
+    "race_condition": {"redeem_voucher": _claim_but_ignore_the_answer},
     "sqli": {"search_invoices": _escape_first_quote},
     "stored_xss": {"render_note": _strip_script_tags},
     "reflected_xss": {"results_heading": lambda q, n: Markup(f"{n} for {q.replace('<script', '')}")},
@@ -171,6 +192,7 @@ def test_half_fixes_do_not_pass_the_check(challenge_id, make_client):
 
 
 SOUND_ALTERNATIVES = {
+    "race_condition": {"redeem_voucher": _redeem_under_a_lock},  # closes it, if only within one process
     "reflected_xss": {"results_heading": lambda q, n: Markup("<b>{}</b>: {} found").format(q, n)},
     "stored_xss": {"render_note": lambda body: Markup('<span style="white-space: pre-line">{}</span>').format(body)},
     "open_redirect": {"redirect_target": lambda url: url if url in ("/invoices", "/notes?from=login") else "/invoices"},
@@ -248,3 +270,28 @@ def test_reference_csrf_fix_never_matches_an_empty_session_token():
     assert genuine("tok", "tok") is True
     assert (genuine("", ""), genuine("tok", ""), genuine("tok", "to"), genuine("tok", "tokk")) == (False,) * 4
     assert genuine("tok", "tök") is False  # non-ASCII input must not raise
+
+
+# ---- race condition -----------------------------------------------------------------------
+
+
+def test_redeeming_a_voucher_once_is_no_race(make_client, captured):
+    client = make_client("vulnerable")
+    client.application.config["PARTNER_SECONDS"] = 0
+    checks._redeem(client, "QB-WELCOME-10")
+    again = client.get(checks._redeem(client, "QB-WELCOME-10").headers["Location"]).get_data(as_text=True)
+    assert "already been used" in again and again.count("QB-WELCOME-10</td>") == 1
+    assert checks._alice_record(client)["credit_cents"] == 3500
+    assert captured() == set()
+
+
+def test_a_fix_that_skips_the_voucher_partner_is_not_accepted(make_client):
+    def no_partner(db, user_id, code, _partner_confirms):
+        return load_impl("solutions").race_condition.redeem_voucher(db, user_id, code, lambda _code: True)
+
+    attack, broken = _with(make_client, "race_condition", redeem_voucher=no_partner)
+    assert attack is None and "withdrawn" in broken
+
+
+def test_the_race_hint_is_the_answer():
+    assert "QB-WELCOME-10" in BY_ID["race_condition"].hints[2] and "Promise.all" in BY_ID["race_condition"].hints[2]

@@ -6,7 +6,7 @@
 <main id="main" class="lab">
   <p class="lab-crumb"><a href="{{ url_for('lab_index') }}">All challenges</a></p>
   <h1 class="lab-title">{{ challenge.title }}</h1>
-  <p class="lab-lede">Challenge {{ number }} of 10. {{ challenge.weakness }}.</p>
+  <p class="lab-lede">Challenge {{ number }} of {{ lab.challenges|length }}. {{ challenge.weakness }}.</p>
 
   <section class="stage" aria-labelledby="stage1">
     <h2 id="stage1"><span class="stage-step">1</span> Break it

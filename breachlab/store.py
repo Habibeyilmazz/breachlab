@@ -16,6 +16,8 @@ from .challenges import FLAGS
 LEARNER = ("alice", "alice-demo")
 
 APP_SCHEMA = """
+DROP TABLE IF EXISTS credit_log;
+DROP TABLE IF EXISTS vouchers;
 DROP TABLE IF EXISTS notes;
 DROP TABLE IF EXISTS invoices;
 DROP TABLE IF EXISTS users;
@@ -40,6 +42,18 @@ CREATE TABLE notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     author_id INTEGER NOT NULL REFERENCES users(id),
     body TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE vouchers (
+    code TEXT PRIMARY KEY,
+    cents INTEGER NOT NULL,
+    redeemed_by INTEGER REFERENCES users(id)
+);
+CREATE TABLE credit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    voucher TEXT NOT NULL,
+    cents INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
@@ -68,6 +82,9 @@ NOTES = [
     (2, "Reminder: the billing keys are served at /internal/keys. That address only answers the app server itself."),
     (3, "Exports are plain text files, invoice-1001.txt and so on. Payroll lives next door in private/, hands off."),
 ]
+
+# One-time vouchers. The partner still knows QB-WELCOME-10; it withdrew QB-SPRING-25 (see app.VOUCHER_PARTNER).
+VOUCHERS = [("QB-WELCOME-10", 1000), ("QB-SPRING-25", 2500)]
 
 
 @cache
@@ -103,6 +120,7 @@ def seed_app(data_dir: Path):
             conn.executemany("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)", _users())
             conn.executemany("INSERT INTO invoices VALUES (?, ?, ?, ?, ?, ?)", INVOICES)
             conn.executemany("INSERT INTO notes (author_id, body) VALUES (?, ?)", NOTES)
+            conn.executemany("INSERT INTO vouchers (code, cents) VALUES (?, ?)", VOUCHERS)
         conn.close()
         os.replace(fresh, data_dir / "app.db")
         _seed_files(data_dir)
@@ -131,9 +149,20 @@ def init(data_dir: Path):
         lab.execute("INSERT OR IGNORE INTO meta VALUES ('secret', ?)", (secrets.token_hex(32),))
     secret = lab.execute("SELECT value FROM meta WHERE key = 'secret'").fetchone()[0]
     lab.close()
-    if not (data_dir / "app.db").exists():
-        seed_app(data_dir)
+    if not (data_dir / "app.db").exists() or not _has_table(data_dir / "app.db", "credit_log"):
+        seed_app(data_dir)  # first start, or data from a version without the race condition challenge
     return secret
+
+
+def _has_table(path, name):
+    conn = connect(path)
+    try:
+        return (
+            conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone()
+            is not None
+        )
+    finally:
+        conn.close()
 
 
 def award(lab, challenge_id):

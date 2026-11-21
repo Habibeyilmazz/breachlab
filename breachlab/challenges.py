@@ -1,4 +1,4 @@
-"""The ten challenges: story, goal, hints and where the vulnerable code lives.
+"""The eleven challenges: story, goal, hints and where the vulnerable code lives.
 
 Story, goal and hint strings are trusted HTML written here, never user input.
 """
@@ -21,6 +21,14 @@ class Challenge:
 
 # {"alg":"none"} . {"sub":"alice","role":"admin"} . no signature: the answer to the JWT challenge
 UNSIGNED_ADMIN_TOKEN = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJhbGljZSIsInJvbGUiOiJhZG1pbiJ9."
+
+# Paste into the developer console on /account: five redemptions at once. redirect: "manual" keeps the
+# flag banner for the next page you open instead of spending it on the redirected fetch.
+RACE_SNIPPET = (
+    "const f = document.getElementById('voucher'); f.code.value = 'QB-WELCOME-10';"
+    " await Promise.all([1, 2, 3, 4, 5].map(() =>"
+    " fetch(f.action, {method: 'POST', body: new FormData(f), redirect: 'manual'}))); location.reload();"
+)
 
 CHALLENGES = [
     Challenge(
@@ -244,6 +252,30 @@ CHALLENGES = [
             " in your address bar.",
             "Import <code>ORIGIN/internal/keys</code>. The lab never opens"
             " outbound connections: only requests to itself are really performed.",
+        ),
+    ),
+    Challenge(
+        id="race_condition",
+        title="Race condition",
+        weakness="A limit checked in one step and enforced in a later one",
+        start="/account",
+        function="redeem_voucher",
+        flag="BL{two-requests-one-voucher}",
+        story=(
+            "<p>Quillbook sent Alice a welcome voucher, <code>QB-WELCOME-10</code>, worth $10 of account credit."
+            " Each voucher works once. Before crediting it, Quillbook asks its voucher partner whether the code"
+            " is genuine, and the partner takes about half a second to answer.</p>"
+            "<p>The server handles requests in parallel. It checks whether the voucher is unused before that"
+            " half second and marks it used after.</p>"
+        ),
+        goal="Get the same single-use voucher credited to your account more than once.",
+        hints=(
+            "Redeem <code>QB-WELCOME-10</code> on the Account page and notice the pause. Then try it again."
+            " Already used it? Reset the app data on the challenge list to get it back.",
+            "A second request that arrives during the pause still sees an unused voucher. Two tabs and fast"
+            " clicks rarely land inside half a second; sending several requests from code does.",
+            "Reset the app data, open the Account page, open the browser's developer console and run:"
+            f" <code>{RACE_SNIPPET}</code> The credit history then shows the voucher more than once.",
         ),
     ),
 ]

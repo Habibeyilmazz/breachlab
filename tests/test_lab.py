@@ -13,9 +13,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from breachlab import store
+from breachlab import checks, store
 from breachlab.__main__ import loopback_address, main
-from breachlab.app import PACKAGE_DIR, SANDBOX_NOTICE, create_broken_app, is_external, is_loopback_host
+from breachlab.app import PACKAGE_DIR, SANDBOX_NOTICE, create_app, create_broken_app, is_external, is_loopback_host
 from breachlab.challenges import CHALLENGES
 
 
@@ -29,7 +29,7 @@ def text(response):
 def test_progress_page_lists_every_challenge(make_client):
     page = text(make_client(login=False).get("/lab"))
     assert all(c.title in page for c in CHALLENGES)
-    assert "0 of 10 flags" in page and "never be deployed" in page
+    assert "0 of 11 flags" in page and "never be deployed" in page
 
 
 @pytest.mark.parametrize("challenge", CHALLENGES, ids=lambda c: c.id)
@@ -61,7 +61,7 @@ def test_unknown_challenge_is_a_404(make_client):
 def test_capturing_a_flag_shows_a_banner_once_and_updates_progress(make_client):
     client = make_client()
     first = text(client.get("/invoices/2001"))
-    assert "Flag captured" in first and "1 of 10 flags" in first
+    assert "Flag captured" in first and "1 of 11 flags" in first
     assert "Flag captured: " not in text(client.get("/invoices"))
     assert text(client.get("/lab")).count("stamp-captured") == 1
 
@@ -109,7 +109,7 @@ def test_data_survives_a_restart(tmp_path):
     lab.close()
     again = create_app(tmp_path)
     assert again.config["SECRET_KEY"] == secret
-    assert "1 of 10 flags" in text(again.test_client().get("/lab"))
+    assert "1 of 11 flags" in text(again.test_client().get("/lab"))
 
 
 # ---- a learner's broken patch must not take the lab down ----------------------------------
@@ -400,3 +400,15 @@ def test_a_request_caught_by_a_reset_gets_a_retry_notice_not_a_500(make_client):
     client.application.view_functions["notes"] = stale  # the endpoint behind /notes
     response = client.post("/notes", data={"body": "x"})
     assert response.status_code == 503 and "Reload the page" in text(response)
+
+
+def test_data_from_an_older_version_is_reseeded(tmp_path):
+    """A checkout updated from a version without vouchers must not fail with 'no such table'."""
+    create_app(tmp_path).test_client()
+    conn = store.connect(tmp_path / "app.db")
+    with conn:
+        conn.execute("DROP TABLE credit_log")
+    conn.close()
+    client = create_app(tmp_path).test_client()
+    checks._login(client)
+    assert client.get("/account").status_code == 200

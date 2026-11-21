@@ -18,6 +18,24 @@
   <input id="email" name="email" type="email" value="{{ g.user.email }}" maxlength="200" required>
   <button class="qb-btn">Save changes</button>
 </form>
+<h2 id="vouchers">Vouchers</h2>
+{% if voucher == 'redeemed' %}<p class="qb-ok" role="status">Voucher redeemed. The credit is on your account.</p>{% endif %}
+{% if voucher == 'refused' %}<p class="qb-alert" role="alert">That voucher is not valid or has already been used.</p>{% endif %}
+<form method="post" action="{{ url_for('redeem_voucher') }}" class="qb-form" id="voucher">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label for="code">Voucher code</label>
+  <input id="code" name="code" maxlength="40" autocomplete="off" required>
+  <button class="qb-btn">Redeem</button>
+</form>
+{% if credits %}
+<table class="qb-table" id="credit-history">
+  <caption class="qb-muted">Credit history</caption>
+  <thead><tr><th scope="col">Voucher</th><th scope="col" class="num">Credit</th><th scope="col">When (UTC)</th></tr></thead>
+  <tbody>
+    {% for row in credits %}<tr><td class="voucher">{{ row.voucher }}</td><td class="num">{{ row.cents|money }}</td><td>{{ row.created_at }}</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endif %}
 <h2>API access</h2>
 <p class="qb-muted">Send this token as <code>Authorization: Bearer …</code> to <code>/api/me</code>.</p>
 <pre class="qb-preview" id="api-token">{{ token }}</pre>

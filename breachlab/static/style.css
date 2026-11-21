@@ -190,6 +190,8 @@ body:has(.lab) { background: var(--paper); }
 .qb-table th, .qb-table .num, .qb-status { overflow-wrap: normal; white-space: nowrap; }
 .qb-table th { font-size: 13px; color: var(--qb-muted); }
 .qb-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.qb-table .voucher { white-space: nowrap; }
+.qb-table caption { text-align: left; padding-bottom: 4px; }
 .qb-status { padding: 2px 8px; border-radius: 10px; background: var(--qb-soft); font-size: 13px; }
 .qb-alert, .qb-ok { padding: 10px 14px; border-radius: 6px; }
 .qb-alert { background: var(--red-wash); color: var(--qb-alert-ink); overflow-wrap: anywhere; }

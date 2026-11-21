@@ -17,6 +17,7 @@ import re
 import secrets
 import socket
 import sqlite3
+import time
 from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
@@ -50,6 +51,7 @@ HOST_HEADER = re.compile(r"(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?")
 USER_COLUMNS = {"username", "password_hash", "display_name", "email", "role", "credit_cents"}
 PROFILE_FIELDS = {"display_name", "email"}
 EMAIL = re.compile(r"[^@\s]+@[^@\s]+")
+VOUCHER_PARTNER = {"QB-WELCOME-10"}  # codes the voucher partner still honours; QB-SPRING-25 was withdrawn
 SANDBOX_NOTICE = (
     "Lab sandbox: BreachLab never opens outbound connections, so nothing was fetched. "
     "A real server would have requested this URL from inside its own network."
@@ -156,6 +158,7 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
         IMPL=impl or load_impl(),
         INTERNAL_TOKEN=secrets.token_hex(16),
         ATTACKER_PORT=attacker_port,
+        PARTNER_SECONDS=0.5,  # how long the (simulated) voucher partner takes to answer
     )
     app.jinja_env.filters["money"] = money
     files_root = data_dir / "files"
@@ -448,7 +451,42 @@ def create_app(data_dir=None, impl=None, attacker_port=None):
                     award("csrf")
                 return redirect(url_for("account", saved=1))
         token = impl_().weak_jwt.issue({"sub": g.user["username"], "role": g.user["role"]})
-        return render_template("account.html", token=token, error=error, saved="saved" in request.args)
+        credits = (
+            db()
+            .execute("SELECT voucher, cents, created_at FROM credit_log WHERE user_id = ? ORDER BY id", (g.user["id"],))
+            .fetchall()
+        )
+        return render_template(
+            "account.html",
+            token=token,
+            error=error,
+            saved="saved" in request.args,
+            voucher=request.args.get("voucher"),
+            credits=credits,
+        )
+
+    def partner_confirms(code):
+        """The voucher partner's answer. A real one is a slow call to another company; this one only waits."""
+        time.sleep(current_app.config["PARTNER_SECONDS"])
+        return code in VOUCHER_PARTNER
+
+    @app.post("/account/voucher")
+    @login_required
+    def redeem_voucher():
+        if not impl_().csrf.is_request_genuine(session.get("csrf", ""), request.form.get("csrf_token", "")):
+            abort(403, "This form has expired. Reload the page and try again.")
+        code = request.form.get("code", "").strip().upper()[:40]
+        cents = impl_().race_condition.redeem_voucher(db(), g.user["id"], code, partner_confirms) if code else None
+        if not isinstance(cents, int) or cents <= 0:
+            return redirect(url_for("account", voucher="refused") + "#vouchers")
+        with db():
+            db().execute(
+                "INSERT INTO credit_log (user_id, voucher, cents) VALUES (?, ?, ?)", (g.user["id"], code, cents)
+            )
+        # Each voucher is single-use: a second credit for the same code means two requests won the race.
+        if db().execute("SELECT COUNT(*) FROM credit_log WHERE voucher = ?", (code,)).fetchone()[0] > 1:
+            award("race_condition")
+        return redirect(url_for("account", voucher="redeemed") + "#vouchers")
 
     @app.get("/admin")
     @login_required
