@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (feature round 15)
+
+- Challenge 12, command injection. Quillbook's help centre has a new "Check your mail server" page
+  (`/help/mail-check`, signed in) that pings a host. `command_injection.ping_command` returns the command:
+  a string means `/bin/sh` runs it, a list means ping runs directly. The vulnerable version is
+  `f"ping -c 1 {host}"`; the reference fix validates the host as an IP address or DNS name and returns
+  `["ping", "-c", "1", "--", host]`, with the why in its docstring. Picked because it was first on the
+  README roadmap's list of missing bug classes and is the classic injection the lab lacked.
+- Safety rail `run_sandboxed` in `app.py`: no process is ever started. `shell_does_more` reads the command
+  line the way a POSIX shell would (quotes, backslashes, `#` comments; `;` `&` `|` newline `$(` backtick
+  `<` `>`), awards the flag and explains what a real server would have run; a plain ping gets an invented
+  reply. README: new "No commands run" rail and a Known limits entry (no variable expansion or globbing).
+- Tests (57 new, 327 in all): exploitable/closed/one-fix-alone via the shared parametrised tests; half-fixes
+  (strip `;`, wrap in double quotes, blocklist `; & |`) fail the check; `shlex.quote` passes; 23 shell
+  parsing cases; the sandbox never calls `subprocess.Popen`; the last hint is the answer; the page needs
+  sign-in. `e2e/solve.cjs` step 12 types the hint's answer into the page found from the help centre; run on
+  port 4162: 12 of 12 flags vulnerable, 12 blocked and verified with `--fixed`.
+- README screenshots (progress, dark, fix, phone) and `docs/demo.gif` retaken from the running app with twelve challenges.
+- Not changed: Windows, Safari and Lighthouse remain unchecked; no social preview image (needs the GitHub
+  web settings, which this agent must not change). Port 4160 still held by a foreign process.
+
 ### Checked (launch pass, round 14)
 
 - Re-verified the launch material: 270 tests pass, CI green on main, README screenshots and demo GIF exist and match

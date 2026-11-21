@@ -1,7 +1,7 @@
 # BreachLab
 
 Learn web security by breaking a small, realistic app and then fixing it, entirely on your own machine.
-Eleven guided challenges, each with a story, three hints, automatic flag detection, and a test that only passes once you have closed the hole.
+Twelve guided challenges, each with a story, three hints, automatic flag detection, and a test that only passes once you have closed the hole.
 
 > [!CAUTION]
 > **BreachLab is vulnerable on purpose. Never deploy it, never expose it to a network.**
@@ -10,9 +10,9 @@ Eleven guided challenges, each with a story, three hints, automatic flag detecti
 
 ![Recording of the lab: the SQL injection challenge, then a search for ' OR 1=1-- in Quillbook shows other people's invoices and captures the flag](docs/demo.gif)
 
-The recording is the real app, driven by `e2e/demo.cjs`. Below: the challenge list with all eleven flags captured and four holes fixed.
+The recording is the real app, driven by `e2e/demo.cjs`. Below: the challenge list with all twelve flags captured and four holes fixed.
 
-![The challenge list with all eleven flags captured and four holes fixed](docs/screenshots/progress.png)
+![The challenge list with all twelve flags captured and four holes fixed](docs/screenshots/progress.png)
 
 ## Quickstart
 
@@ -67,7 +67,7 @@ Use it to break a challenge again, or to throw away a patch that went wrong. It 
 the quickstart; without git it still clears the progress and tells you to undo the file by hand. If you
 committed your patch, HEAD is your patch, and there is nothing to put back.
 
-## The eleven challenges
+## The twelve challenges
 
 | # | Challenge | Where in Quillbook | Function you patch |
 |---|-----------|--------------------|--------------------|
@@ -82,12 +82,13 @@ committed your patch, HEAD is your patch, and there is nothing to put back.
 | 9 | Forged JWT (`alg: none` and a weak secret) | API token | `weak_jwt.verify` |
 | 10 | Server-side request forgery | Import invoice from URL | `ssrf.is_allowed_url` |
 | 11 | Race condition | Voucher redemption on the account page | `race_condition.redeem_voucher` |
+| 12 | Command injection | Mail server check in the help centre | `command_injection.ping_command` |
 
 ## Features
 
-- Eleven challenges with a story, a goal, three progressive hints and a flag each.
+- Twelve challenges with a story, a goal, three progressive hints and a flag each.
 - Automatic detection: the server recognises a successful attack (a foreign row in search results, a
-  read outside the exports folder, a forged admin token, script calling `alert()`, and so on). There
+  read outside the exports folder, a forged admin token, a shell command line that would run more than ping, script calling `alert()`, and so on). There
   is no flag form to paste into.
 - A fix stage per challenge: a marked function, a provided test, a "Check my fix" button, and a
   reference fix that explains itself.
@@ -105,7 +106,7 @@ committed your patch, HEAD is your patch, and there is nothing to put back.
 
 ![The challenge list in the dark theme](docs/screenshots/progress-dark.png)
 
-<img src="docs/screenshots/phone.png" width="300" alt="A challenge page at phone width: the bar with eleven squares sits under the BreachLab name, the story and goal below">
+<img src="docs/screenshots/phone.png" width="300" alt="A challenge page at phone width: the bar with twelve squares sits under the BreachLab name, the command injection story and goal below">
 
 ## How it works
 
@@ -113,8 +114,8 @@ committed your patch, HEAD is your patch, and there is nothing to put back.
 breachlab/
   app.py           Quillbook (the fake app) and the lab pages, one Flask app
   attacker.py      Mallory's site: serves the learner's CSRF attacker page on the next port
-  vulnerable/      eleven small modules, one deliberately vulnerable function each  <- you edit these
-  solutions/       the same eleven functions, fixed, with the explanation in the docstring
+  vulnerable/      twelve small modules, one deliberately vulnerable function each  <- you edit these
+  solutions/       the same twelve functions, fixed, with the explanation in the docstring
   checks.py        per challenge: replay the attack, then check the feature still works
   challenges.py    stories, goals, hints
   store.py         throwaway SQLite data and progress
@@ -152,6 +153,9 @@ These are part of the lab, not part of any challenge:
   notice instead of a request. The lab cannot be used to reach your network. One caveat: a correct
   SSRF fix has to resolve the host name it is given, so with the reference fix (or your own) a DNS
   lookup for the name you typed can leave your machine. No HTTP request ever does.
+- **No commands run.** The command injection challenge never starts a process. The lab reads the command
+  your code returns the way `/bin/sh` would, says what a real server would have run, and answers a plain
+  ping with an invented reply. No packet is sent either.
 - **Fenced file access.** The path traversal hole can leave the `exports` folder, but the lab only
   ever serves files from its own `.breachlab/files/` folder. An attempt to read `/etc/passwd` still
   captures the flag, and gets an explanation instead of the file.
@@ -176,7 +180,7 @@ pytest                                   # the lab's own suite, green on a clean
 BREACHLAB_IMPL=solutions pytest fix_tests  # the provided tests against the reference fixes
 ```
 
-The suite proves, for each of the eleven challenges, that the attack succeeds and the flag is captured
+The suite proves, for each of the twelve challenges, that the attack succeeds and the flag is captured
 on the vulnerable code, that the reference fix blocks the attack while the feature keeps working, and
 that fixing one challenge alone turns its test green. The checks are tested too: a set of plausible
 half-fixes (escaping only the first quote, stripping only `<script>` tags, refusing only loopback
@@ -185,7 +189,7 @@ safety rails above.
 
 Script execution for the two XSS challenges cannot be observed without a browser, so pytest proves
 them by the payload arriving unescaped in the HTML. `e2e/solve.cjs` covers the rest of the way: it
-drives Chromium through all eleven exploits against a running server and, with `MODE=fixed`, checks that
+drives Chromium through all twelve exploits against a running server and, with `MODE=fixed`, checks that
 they all fail on the reference fixes. CI runs both.
 
 ```bash
@@ -207,7 +211,7 @@ BreachLab is small and Python-only on purpose. Other tools are better at things 
 
 BreachLab's niche: a Python codebase you can read in an afternoon, nothing to install but Flask, and a
 fix stage that runs a test against the code you patched, so you practise defending as well as attacking.
-It has eleven challenges, not hundreds, and it is not a replacement for any of the above.
+It has twelve challenges, not hundreds, and it is not a replacement for any of the above.
 
 ## Known limits
 
@@ -224,12 +228,16 @@ It has eleven challenges, not hundreds, and it is not a replacement for any of t
   before the write) still loses. A read through `db.cursor()` skips that delay. A `threading.Lock` around
   the function passes; it closes the race in this one-process lab but not in an app with several workers,
   which the reference fix explains.
+- The command injection sandbox reads a command line like `/bin/sh` does for the cases that matter here
+  (`;`, `&`, `|`, newlines, `$(...)`, backticks, `<`, `>`, quotes, backslashes and `#` comments). It is not a
+  full shell: variable expansion such as `$HOME` and globbing are not counted as an attack, and only ping
+  gets a simulated reply.
 - One learner per checkout: progress is global, not per user.
 
 ## Roadmap
 
 - A playable RS256/HS256 key confusion challenge.
-- More bug classes: command injection, XXE, insecure deserialization, clickjacking.
+- More bug classes: XXE, insecure deserialization, clickjacking.
 - A defence-in-depth stage per challenge (Content-Security-Policy, cookie flags, framework CSRF protection).
 - Verified Windows support.
 
