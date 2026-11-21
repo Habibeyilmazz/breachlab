@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed (design pass, round 10)
+
+- Looked at every lab and Quillbook page in Chromium at 1280 px and 390 px, light and dark. No horizontal
+  scroll, focus rings visible everywhere tried; most of it was already in good shape, so the changes are small.
+- Phones: the lab bar was three rows (name, squares, count) and Quillbook's header four, so about 270 px
+  of chrome before any content. Now the BreachLab name, flag count and Challenges link share one row with
+  the squares below, and Quillbook's logo and Sign out share one row with the links below.
+- "Check my fix" says "Checking…" while the check runs (the race check takes about a second) and ignores a
+  second click; the Back button restores it. Checked by `e2e/solve.cjs` on the race challenge.
+- Invoice statuses are coloured: paid green, overdue red, due neutral (`data-status` on the pill).
+- The demo credentials on the sign-in page no longer break at the hyphen of `alice-demo`.
+- README: `exploit.png` retaken (status colours) and a new phone-width screenshot, `docs/screenshots/phone.png`.
+- Not changed: the 404 page still uses Flask's stock wording; Windows, Safari and Lighthouse remain unchecked.
+
 ### Fixed (first-run review, round 9)
 
 - Fresh clone, README quickstart followed literally on macOS (Python 3.12): install, `pytest`, the

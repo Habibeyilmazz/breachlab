@@ -97,6 +97,8 @@ reference fixes so you can watch your attacks fail.
 
 ![The challenge list in the dark theme](docs/screenshots/progress-dark.png)
 
+<img src="docs/screenshots/phone.png" width="300" alt="A challenge page at phone width: the bar with eleven squares sits under the BreachLab name, the story and goal below">
+
 ## How it works
 
 ```
