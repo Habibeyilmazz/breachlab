@@ -19,6 +19,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Mallory's site, a built-in attacker website for the CSRF challenge. It was the only challenge that
+  sent the learner off to write a file and start a second server. Now the challenge page has a box for
+  the attacker page; "Save page" stores it in `.breachlab/attacker.html` and the lab serves it at `/`
+  on the next port (`--attacker-port`, default `--port` + 1), a different origin but the same site.
+  It runs in a thread of the serving process (restarted with it by the reloader) with the lab's
+  loopback, Host and cross-site rails. A busy port does not stop the lab: the page then shows the
+  `python3 -m http.server` workaround. Hints 2 and 3 point at it. `e2e/solve.cjs` now solves CSRF
+  through it instead of running its own server. Tests: `tests/test_attacker.py`, plus a check in
+  `test_saving_a_syntax_error_does_not_kill_the_server` that the site comes back after a reload.
 - A dark theme for the lab pages and Quillbook, picked from the system's `prefers-color-scheme`.
   Colours in `static/style.css` are tokens on `:root`; `--night` is for surfaces that stay dark in
   both themes (lab bar, code blocks).
@@ -56,6 +65,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Notes for the next contributor
 
+- Werkzeug's `make_server` calls `sys.exit(1)` (not raise) when a port is busy; `start_attacker` in
+  `__main__.py` catches `SystemExit` for that reason. Tests that start real servers keep to ports
+  4165-4169 and pass `--attacker-port` so the default `--port` + 1 does not leave that range.
 - Design pass: checked desktop and 390px, light and dark, by screenshot, plus Tab order on the
   challenge list. README screenshots were retaken from the running app (vulnerable lab with ten
   flags, four marked fixed with "Check my fix" on a `--fixed` server sharing the same checkout).

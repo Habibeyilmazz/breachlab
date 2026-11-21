@@ -24,6 +24,7 @@ python -m breachlab
 ```
 
 Open <http://127.0.0.1:4160/> and pick a challenge. Sign in to the practice app as `alice` / `alice-demo`.
+The lab also uses the next port, 4161, for Mallory's site (see below); `--port` and `--attacker-port` change both.
 
 Developed and tested on macOS and Linux. Windows is untested.
 
@@ -78,6 +79,11 @@ reference fixes so you can watch your attacks fail.
   is no flag form to paste into.
 - A fix stage per challenge: a marked function, a provided test, a "Check my fix" button, and a
   reference fix that explains itself.
+- Mallory's site, a built-in attacker website for the CSRF challenge: write the attacker page in a box
+  on the challenge page, save, and open it. It is served on the next port (4161 by default), so it is a
+  different origin from the lab but the same site, which is what the attack needs. Nothing else to install
+  or start. If that port is busy, the lab starts anyway and the challenge page explains how to serve the
+  page with `python3 -m http.server` instead.
 - A progress page showing which holes you have broken and which you have fixed, also visible as a
   strip of ten squares in the bar above every page.
 - Reset buttons: restore the sample data (keeps your flags), or wipe data and progress.
@@ -91,6 +97,7 @@ reference fixes so you can watch your attacks fail.
 ```
 breachlab/
   app.py           Quillbook (the fake app) and the lab pages, one Flask app
+  attacker.py      Mallory's site: serves the learner's CSRF attacker page on the next port
   vulnerable/      ten small modules, one deliberately vulnerable function each  <- you edit these
   solutions/       the same ten functions, fixed, with the explanation in the docstring
   checks.py        per challenge: replay the attack, then check the feature still works
@@ -131,7 +138,11 @@ These are part of the lab, not part of any challenge:
 - **Fenced file access.** The path traversal hole can leave the `exports` folder, but the lab only
   ever serves files from its own `.breachlab/files/` folder. An attempt to read `/etc/passwd` still
   captures the flag, and gets an explanation instead of the file.
-- **Lab actions are same-origin.** Reset, "Check my fix" and the XSS beacon reject posts from other origins.
+- **Lab actions are same-origin.** Reset, "Check my fix", saving Mallory's page and the XSS beacon reject
+  posts from other origins.
+- **Mallory's site gets the same rails.** It binds to the lab's loopback address, answers only local
+  clients with a loopback `Host`, refuses cross-site requests, and serves only the one page you saved
+  (`.breachlab/attacker.html`, at most 20,000 characters). "Reset data and progress" deletes it.
 
 The rails limit what a mistake can cost; they do not make the app safe. Stop the server when you are not practising.
 
@@ -157,7 +168,7 @@ they all fail on the reference fixes. CI runs both.
 ```bash
 cd e2e && npm install && npx playwright install chromium && cd ..
 python -m breachlab --no-reload &
-node e2e/solve.cjs          # wipes lab progress first; uses port 4161 for the attacker page
+node e2e/solve.cjs          # wipes lab progress first; uses Mallory's site on port 4161
 ```
 
 ## Known limits
@@ -174,7 +185,6 @@ node e2e/solve.cjs          # wipes lab progress first; uses port 4161 for the a
 
 ## Roadmap
 
-- A built-in attacker page helper for the CSRF challenge (today you start `python3 -m http.server` yourself).
 - A playable RS256/HS256 key confusion challenge.
 - More bug classes: command injection, XXE, insecure deserialization, race conditions, clickjacking.
 - A defence-in-depth stage per challenge (Content-Security-Policy, cookie flags, framework CSRF protection).
